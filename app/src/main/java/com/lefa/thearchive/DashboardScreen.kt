@@ -4,24 +4,36 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.lefa.thearchive.model.Stats
 import com.lefa.thearchive.ui.theme.*
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+import java.util.concurrent.TimeUnit
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DashboardScreen(stats: Stats, onContinue: () -> Unit) {
     val scrollState = rememberScrollState()
+    var searchQuery by remember { mutableStateOf("") }
+    val focusManager = LocalFocusManager.current
 
     Box(
         modifier = Modifier
@@ -44,28 +56,63 @@ fun DashboardScreen(stats: Stats, onContinue: () -> Unit) {
                 modifier = Modifier.padding(vertical = 20.dp)
             )
 
-            // Total Messages
+            // --- SEARCH SECTION ---
+            OutlinedTextField(
+                value = searchQuery,
+                onValueChange = { searchQuery = it },
+                label = { Text("Search our memories...", color = TextSecondary) },
+                leadingIcon = { Icon(Icons.Default.Search, contentDescription = "Search", tint = DeepLove) },
+                colors = TextFieldDefaults.outlinedTextFieldColors(
+                    focusedBorderColor = DeepLove,
+                    unfocusedBorderColor = SoftAccent
+                ),
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(15.dp),
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() })
+            )
+
+            if (searchQuery.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(10.dp))
+                SearchResultCard(stats, searchQuery)
+            }
+
+            Spacer(modifier = Modifier.height(20.dp))
+
+            // --- FIRST TIME SECTION ---
+            Text("FIRST TIMES", color = TextSecondary, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+            Spacer(modifier = Modifier.height(10.dp))
+
+            stats.firstOccurrences.forEach { (word, pair) ->
+                FirstTimeCard(word, pair.first, pair.second, stats.startDate)
+            }
+
+            Spacer(modifier = Modifier.height(20.dp))
+
+            // --- EXISTING STATS ---
             StatCard("Total Memories", stats.totalMessages.toString())
 
-            // Message Count Split
             val lefaCount = stats.messageCounts["lefa"] ?: 0
             val owamiCount = stats.messageCounts["owami"] ?: 0
             ComparisonCard("Messages Sent", lefaCount, owamiCount)
 
-            // "I Love You" Count
             val lefaLove = stats.loveCounts["lefa"] ?: 0
             val owamiLove = stats.loveCounts["owami"] ?: 0
             ComparisonCard("Said 'I Love You'", lefaLove, owamiLove)
 
-            // Specific Words
-            stats.specificWordCounts.forEach { (word, counts) ->
-                ComparisonCard("Said '$word'", counts["lefa"] ?: 0, counts["owami"] ?: 0)
-            }
+            // --- BONUS STATS ---
+            Text("FUN FACTS", color = TextSecondary, fontSize = 18.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 20.dp))
 
-            // Most Active Hour
-            val maxHour = stats.hourlyActivity.maxByOrNull { it.value }?.key ?: 0
-            val timeStr = if (maxHour < 12) "$maxHour AM" else if (maxHour == 12) "12 PM" else "${maxHour-12} PM"
-            StatCard("Most Active Time", timeStr)
+            StatCard("Nocturnal Chats (12AM-4AM)", "${stats.nocturnalMessages} messages")
+
+            // On This Day Logic
+            val todayKey = SimpleDateFormat("MM-dd", Locale.US).format(Date())
+            val memoriesToday = stats.messagesByDate[todayKey]
+            if (!memoriesToday.isNullOrEmpty()) {
+                val randomMemory = memoriesToday.random()
+                MemoryCard("ON THIS DAY", randomMemory.content, randomMemory.fullDate)
+            }
 
             Spacer(modifier = Modifier.height(30.dp))
 
@@ -80,6 +127,88 @@ fun DashboardScreen(stats: Stats, onContinue: () -> Unit) {
                 Text("SEE THE MESSAGE", color = Color.White, fontWeight = FontWeight.Bold)
             }
             Spacer(modifier = Modifier.height(30.dp))
+        }
+    }
+}
+
+@Composable
+fun SearchResultCard(stats: Stats, query: String) {
+    val lowerQuery = query.lowercase()
+
+    // Check tracked words first (faster lookup)
+    val trackedCounts = stats.specificWordCounts[lowerQuery]
+
+    if (trackedCounts != null) {
+        ComparisonCard("Search: '$query'", trackedCounts["lefa"] ?: 0, trackedCounts["owami"] ?: 0)
+    } else {
+        // Dynamic Search by iterating through all messages
+        // We use derivedStateOf or LaunchedEffect in a real app,
+        // but here simple calculation on composition is acceptable for prototype gift app.
+
+        var lefaCount = 0
+        var owamiCount = 0
+
+        stats.messagesByDate.values.forEach { dayList ->
+            dayList.forEach { msg ->
+                if (msg.content.contains(query, ignoreCase = true)) {
+                    if (msg.author == "lefa") lefaCount++ else owamiCount++
+                }
+            }
+        }
+
+        if (lefaCount == 0 && owamiCount == 0) {
+            Card(
+                colors = CardDefaults.cardColors(containerColor = PureWhite),
+                modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)
+            ) {
+                Column(modifier = Modifier.padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text("No results found for '$query'", color = TextSecondary, fontSize = 14.sp)
+                }
+            }
+        } else {
+            ComparisonCard("Search: '$query'", lefaCount, owamiCount)
+        }
+    }
+}
+
+@Composable
+fun FirstTimeCard(word: String, who: String, date: Date, startDate: Date) {
+    val daysDiff = TimeUnit.DAYS.convert(date.time - startDate.time, TimeUnit.MILLISECONDS)
+    val dateStr = SimpleDateFormat("MMM dd, yyyy", Locale.US).format(date)
+
+    Card(
+        colors = CardDefaults.cardColors(containerColor = RoseSurface),
+        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+    ) {
+        Row(
+            modifier = Modifier.padding(16.dp).fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column {
+                Text("First '$word'", color = TextSecondary, fontSize = 12.sp)
+                Text(who.capitalize(Locale.ROOT), color = DeepLove, fontWeight = FontWeight.Bold)
+            }
+            Column(horizontalAlignment = Alignment.End) {
+                Text(dateStr, color = TextPrimary, fontSize = 14.sp)
+                Text("Day $daysDiff", color = TextSecondary, fontSize = 12.sp)
+            }
+        }
+    }
+}
+
+@Composable
+fun MemoryCard(title: String, content: String, date: String) {
+    Card(
+        colors = CardDefaults.cardColors(containerColor = Gold.copy(alpha = 0.2f)),
+        modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)
+    ) {
+        Column(modifier = Modifier.padding(20.dp)) {
+            Text(title, color = Gold, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+            Spacer(modifier = Modifier.height(5.dp))
+            Text("\"$content\"", color = TextPrimary, fontSize = 16.sp, fontStyle = androidx.compose.ui.text.font.FontStyle.Italic)
+            Spacer(modifier = Modifier.height(5.dp))
+            Text("- $date", color = TextSecondary, fontSize = 12.sp, modifier = Modifier.align(Alignment.End))
         }
     }
 }
