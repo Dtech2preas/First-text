@@ -194,6 +194,7 @@ fun TheArchiveApp() {
             "GAME" -> GameScreen(keys, KEYS_NEEDED, currentQuestion, feedback, handleAnswer)
             "FINALE" -> FinaleScreen(stats)
         }
+        Unit
     }
 }
 
