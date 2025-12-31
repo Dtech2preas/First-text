@@ -1,5 +1,6 @@
 package com.lefa.thearchive.model
 
+import java.io.Serializable
 import java.util.Date
 
 data class Stats(
@@ -15,9 +16,9 @@ data class Stats(
     val firstOccurrences: Map<String, Pair<String, Date>>, // "I love you" -> ("lefa", Date)
     val nocturnalMessages: Int,
     val messagesByDate: Map<String, List<Message>> // "MM-dd" -> List<Message> for "On This Day"
-)
+) : Serializable
 
 data class ReplyPair(
     val original: List<Message>, // Changed to list for consecutive messages
     val reply: Message
-)
+) : Serializable
