@@ -19,6 +19,12 @@ object ChatParser {
         val messages = mutableListOf<Message>()
 
         for (line in lines) {
+            // Filter out system messages that might look like chat lines but aren't
+            if (line.contains("Messages and calls are end-to-end encrypted") ||
+                line.contains("Chats connection", ignoreCase = true)) {
+                continue
+            }
+
             val matcher = PATTERN.matcher(line)
             if (matcher.find()) {
                 val dateStr = matcher.group(1) ?: ""

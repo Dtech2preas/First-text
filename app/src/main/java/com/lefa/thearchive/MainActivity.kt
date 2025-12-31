@@ -86,51 +86,10 @@ fun TheArchiveApp() {
     val KEYS_NEEDED = 5
     var currentQuestion by remember { mutableStateOf<Question?>(null) }
 
-    // Load Resources
-    LaunchedEffect(Unit) {
-        withContext(Dispatchers.IO) {
-            try {
-                val inputStream = context.resources.openRawResource(
-                    context.resources.getIdentifier("chat", "raw", context.packageName)
-                )
-                val reader = BufferedReader(InputStreamReader(inputStream))
-                val content = reader.readText()
-                reader.close()
-
-                val parsed = ChatParser.parseChat(content)
-                messages = parsed
-                val s = ChatParser.generateStats(parsed)
-                statsData = s
-
-                delay(1000)
-                withContext(Dispatchers.Main) {
-                    screen = "INTRO"
-                }
-            } catch (e: Exception) {
-                e.printStackTrace()
-                withContext(Dispatchers.Main) {
-                    feedback = e.localizedMessage
-                    screen = "ERROR"
-                }
-            }
-        }
-    }
-
     fun pickNextQuestion() {
         feedback = null
-        val r = Math.random()
-        // Mix of question types
-        currentQuestion = when {
-            r < 0.25 -> GameEngine.generateWhoSaidIt(messages, 1).firstOrNull()
-            r < 0.50 && statsData != null -> GameEngine.generateGuessTheReply(statsData!!.replyPairs, messages, 1).firstOrNull()
-            r < 0.75 -> GameEngine.generateCompleteThePhrase(messages, 1).firstOrNull()
-            else -> GameEngine.generateChronologicalOrder(messages, 1).firstOrNull()
-        }
-
-        // Fallback if null (e.g. not enough reply pairs)
-        if (currentQuestion == null) {
-            currentQuestion = GameEngine.generateWhoSaidIt(messages, 1).firstOrNull()
-        }
+        // Only WHO_SAID_IT is left
+        currentQuestion = GameEngine.generateWhoSaidIt(messages, 1).firstOrNull()
     }
 
     val startGame = {
@@ -170,22 +129,17 @@ fun TheArchiveApp() {
             .background(Brush.verticalGradient(listOf(RoseBackground, PureWhite)))
     ) {
         when (screen) {
-            "LOADING" -> LoadingScreen()
+            "LOADING" -> LoadingScreen(onParsingComplete = { stats ->
+                statsData = stats
+                messages = stats.messagesByDate.values.flatten()
+                screen = "INTRO"
+            })
             "ERROR" -> ErrorScreen(feedback ?: "Unknown Error") { }
             "INTRO" -> statsData?.let { IntroScreen(Pair(it.totalMessages, it.dateRange), startGame) }
             "GAME" -> GameScreen(keys, KEYS_NEEDED, currentQuestion, feedback, handleAnswer)
             "DASHBOARD" -> statsData?.let { DashboardScreen(it) { screen = "FINALE" } }
             "FINALE" -> statsData?.let { FinaleScreen(Pair(it.totalMessages, it.dateRange)) }
         }
-    }
-}
-
-// ... existing LoadingScreen, ErrorScreen, IntroScreen ...
-
-@Composable
-fun LoadingScreen() {
-    Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
-        Text("Opening our memories...", color = DeepLove, fontSize = 18.sp, fontStyle = FontStyle.Italic)
     }
 }
 
@@ -312,37 +266,13 @@ fun GameScreen(
             if (question != null) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
 
-                    val title = when(question.type) {
-                        QuestionType.WHO_SAID_IT -> "Who said this?"
-                        QuestionType.GUESS_THE_REPLY -> "What was the reply?"
-                        QuestionType.COMPLETE_THE_PHRASE -> "Complete the text"
-                        QuestionType.CHRONOLOGICAL_ORDER -> "Which came first?"
-                        else -> "Question"
-                    }
-
                     Text(
-                        title,
+                        "Who said this?",
                         color = TextSecondary,
                         letterSpacing = 1.sp,
                         fontSize = 16.sp,
                         modifier = Modifier.padding(bottom = 20.dp)
                     )
-
-                    // Context (Previous message for Reply Game)
-                    if (question.context != null && question.type == QuestionType.GUESS_THE_REPLY) {
-                        Surface(
-                            color = RoseSurface.copy(alpha = 0.5f),
-                            shape = RoundedCornerShape(15.dp),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(bottom = 10.dp)
-                        ) {
-                            Column(modifier = Modifier.padding(15.dp)) {
-                                Text("Context:", fontSize = 12.sp, color = TextSecondary)
-                                Text(question.text, fontStyle = FontStyle.Italic, color = TextPrimary)
-                            }
-                        }
-                    }
 
                     Surface(
                         color = PureWhite,
@@ -353,12 +283,7 @@ fun GameScreen(
                             .padding(bottom = 30.dp)
                     ) {
                         Text(
-                            // For Guess Reply, main text is context, we want to hide that logic in specific UI or just show question text
-                            // In GameEngine, I set text = msg.content.
-                            // For Reply, text is original msg.
-                            // For CompletePhrase, text is "I love ____".
-                            // For Chronological, text is "A: ... B: ..."
-                            if (question.type == QuestionType.GUESS_THE_REPLY) "???" else question.text,
+                            question.text,
                             color = TextPrimary,
                             fontSize = 20.sp,
                             textAlign = TextAlign.Center,

@@ -8,7 +8,6 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -17,10 +16,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.lefa.thearchive.model.Message
 import com.lefa.thearchive.model.Stats
 import com.lefa.thearchive.ui.theme.*
 import java.text.SimpleDateFormat
@@ -131,42 +132,113 @@ fun DashboardScreen(stats: Stats, onContinue: () -> Unit) {
     }
 }
 
+data class SearchMetrics(
+    val lefaCount: Int,
+    val owamiCount: Int,
+    val firstEver: Message?,
+    val lefaFirst: Message?,
+    val owamiFirst: Message?
+)
+
 @Composable
 fun SearchResultCard(stats: Stats, query: String) {
     val lowerQuery = query.lowercase()
 
-    // Check tracked words first (faster lookup)
-    val trackedCounts = stats.specificWordCounts[lowerQuery]
-
-    if (trackedCounts != null) {
-        ComparisonCard("Search: '$query'", trackedCounts["lefa"] ?: 0, trackedCounts["owami"] ?: 0)
-    } else {
-        // Dynamic Search by iterating through all messages
-        // We use derivedStateOf or LaunchedEffect in a real app,
-        // but here simple calculation on composition is acceptable for prototype gift app.
-
+    // Wrap heavy calculation in remember to prevent re-computation on every frame
+    val metrics = remember(query, stats) {
         var lefaCount = 0
         var owamiCount = 0
+        var lefaFirst: Message? = null
+        var owamiFirst: Message? = null
+        var firstEver: Message? = null
 
-        stats.messagesByDate.values.forEach { dayList ->
-            dayList.forEach { msg ->
+        val sortedKeys = stats.messagesByDate.keys.sorted()
+        for (key in sortedKeys) {
+            val daysMessages = stats.messagesByDate[key] ?: continue
+            for (msg in daysMessages) {
                 if (msg.content.contains(query, ignoreCase = true)) {
                     if (msg.author == "lefa") lefaCount++ else owamiCount++
+                    if (firstEver == null) firstEver = msg
+                    if (msg.author == "lefa" && lefaFirst == null) lefaFirst = msg
+                    if (msg.author == "owami" && owamiFirst == null) owamiFirst = msg
                 }
             }
         }
+        SearchMetrics(lefaCount, owamiCount, firstEver, lefaFirst, owamiFirst)
+    }
 
-        if (lefaCount == 0 && owamiCount == 0) {
+    if (metrics.lefaCount == 0 && metrics.owamiCount == 0) {
+        Card(
+            colors = CardDefaults.cardColors(containerColor = PureWhite),
+            modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)
+        ) {
+            Column(modifier = Modifier.padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                Text("No results found for '$query'", color = TextSecondary, fontSize = 14.sp)
+            }
+        }
+    } else {
+        Column {
+            ComparisonCard("Search: '$query'", metrics.lefaCount, metrics.owamiCount)
+
+            // Detailed Breakdown
             Card(
                 colors = CardDefaults.cardColors(containerColor = PureWhite),
                 modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)
             ) {
-                Column(modifier = Modifier.padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("No results found for '$query'", color = TextSecondary, fontSize = 14.sp)
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text("Deep Dive: '$query'", color = DeepLove, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    // 1. Who said it first ever?
+                    if (metrics.firstEver != null) {
+                        val day0 = TimeUnit.DAYS.convert(metrics.firstEver.timestamp.time - stats.startDate.time, TimeUnit.MILLISECONDS)
+                        MetricRow("First Ever Said By", metrics.firstEver.author.replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.ROOT) else it.toString() }, "Day $day0")
+                    }
+
+                    Divider(color = SoftAccent, thickness = 0.5.dp, modifier = Modifier.padding(vertical = 8.dp))
+
+                    // 2. Lefa Details
+                    if (metrics.lefaFirst != null) {
+                        val dayL = TimeUnit.DAYS.convert(metrics.lefaFirst.timestamp.time - stats.startDate.time, TimeUnit.MILLISECONDS)
+                        MetricRow("Lefa First Said", SimpleDateFormat("MMM dd, yyyy", Locale.US).format(metrics.lefaFirst.timestamp), "Day $dayL")
+                    } else {
+                        MetricRow("Lefa First Said", "Never", "-")
+                    }
+
+                    // 3. Owami Details
+                    if (metrics.owamiFirst != null) {
+                        val dayO = TimeUnit.DAYS.convert(metrics.owamiFirst.timestamp.time - stats.startDate.time, TimeUnit.MILLISECONDS)
+                        MetricRow("Owami First Said", SimpleDateFormat("MMM dd, yyyy", Locale.US).format(metrics.owamiFirst.timestamp), "Day $dayO")
+                    } else {
+                        MetricRow("Owami First Said", "Never", "-")
+                    }
+
+                    Divider(color = SoftAccent, thickness = 0.5.dp, modifier = Modifier.padding(vertical = 8.dp))
+
+                    // 4. Lag Time
+                    if (metrics.lefaFirst != null && metrics.owamiFirst != null) {
+                        val diff = Math.abs(metrics.lefaFirst.timestamp.time - metrics.owamiFirst.timestamp.time)
+                        val daysLag = TimeUnit.DAYS.convert(diff, TimeUnit.MILLISECONDS)
+                        val follower = if (metrics.lefaFirst.timestamp.before(metrics.owamiFirst.timestamp)) "Owami" else "Lefa"
+
+                        MetricRow("Lag Time", "$follower took", "$daysLag days later")
+                    }
                 }
             }
-        } else {
-            ComparisonCard("Search: '$query'", lefaCount, owamiCount)
+        }
+    }
+}
+
+@Composable
+fun MetricRow(label: String, value: String, detail: String) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Text(label, color = TextSecondary, fontSize = 14.sp)
+        Column(horizontalAlignment = Alignment.End) {
+            Text(value, color = TextPrimary, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+            Text(detail, color = DeepLove, fontSize = 12.sp)
         }
     }
 }
@@ -187,7 +259,7 @@ fun FirstTimeCard(word: String, who: String, date: Date, startDate: Date) {
         ) {
             Column {
                 Text("First '$word'", color = TextSecondary, fontSize = 12.sp)
-                Text(who.capitalize(Locale.ROOT), color = DeepLove, fontWeight = FontWeight.Bold)
+                Text(who.replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.ROOT) else it.toString() }, color = DeepLove, fontWeight = FontWeight.Bold)
             }
             Column(horizontalAlignment = Alignment.End) {
                 Text(dateStr, color = TextPrimary, fontSize = 14.sp)
@@ -206,7 +278,7 @@ fun MemoryCard(title: String, content: String, date: String) {
         Column(modifier = Modifier.padding(20.dp)) {
             Text(title, color = Gold, fontSize = 14.sp, fontWeight = FontWeight.Bold)
             Spacer(modifier = Modifier.height(5.dp))
-            Text("\"$content\"", color = TextPrimary, fontSize = 16.sp, fontStyle = androidx.compose.ui.text.font.FontStyle.Italic)
+            Text("\"$content\"", color = TextPrimary, fontSize = 16.sp, fontStyle = FontStyle.Italic)
             Spacer(modifier = Modifier.height(5.dp))
             Text("- $date", color = TextSecondary, fontSize = 12.sp, modifier = Modifier.align(Alignment.End))
         }
