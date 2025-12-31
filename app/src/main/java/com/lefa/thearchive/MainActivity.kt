@@ -76,7 +76,7 @@ fun TheArchiveApp() {
 
     // Game State
     var keys by remember { mutableStateOf(0) }
-    val KEYS_NEEDED = 15 // Increased to 15
+    val KEYS_NEEDED = 15
     var currentQuestion by remember { mutableStateOf<Question?>(null) }
 
     // Victory State
@@ -107,7 +107,9 @@ fun TheArchiveApp() {
             } else {
                 feedback = "WRONG"
                 // Deduct point, min 0
-                if (keys > 0) keys--
+                if (keys > 0) {
+                    keys--
+                }
             }
         }
         Unit
@@ -144,10 +146,6 @@ fun TheArchiveApp() {
                 }
             )
             "MEANTIME" -> MeantimeQuizScreen {
-                // When done with Meantime, go back to loading (or stay there if loaded, waiting for user to click Enter)
-                // Actually, user said: "Wait till we finish typing and manually press the seach button" ... wait, that's dashboard.
-                // For meantime, "whill will be some questions for keep her busy while it loads".
-                // If it finishes, we can probably go back to Loading screen which likely has the "Enter" button ready now.
                 screen = "LOADING"
             }
             "ERROR" -> ErrorScreen(feedback ?: "Unknown Error") { }
@@ -166,7 +164,7 @@ fun TheArchiveApp() {
                     }
                 } else if (showHoohaaDialog) {
                     AlertDialog(
-                        onDismissRequest = {}, // Force user to read it
+                        onDismissRequest = {},
                         title = { Text("Congratulations!", fontWeight = FontWeight.Bold, color = DeepLove) },
                         text = { Text("You have a nice hoohaa just so you know...", fontSize = 18.sp) },
                         confirmButton = {
@@ -246,14 +244,14 @@ fun IntroScreen(stats: Pair<Int, String>, onStart: () -> Unit, onSkip: (() -> Un
             modifier = Modifier.padding(vertical = 30.dp).fillMaxWidth()
         ) {
             Column(modifier = Modifier.padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                 Text(
+                Text(
                     "${stats.first} Messages",
                     color = TextPrimary,
                     fontWeight = FontWeight.Bold,
                     fontSize = 24.sp
                 )
-                 Text(
-                    "Since ${stats.second.substringBefore(",")}", // Simple trim
+                Text(
+                    "Since ${stats.second.substringBefore(",")}",
                     color = TextSecondary,
                     fontSize = 14.sp
                 )
@@ -357,6 +355,7 @@ fun GameScreen(
 
                     // Options
                     question.options.forEach { opt ->
+                        // Corrected: explicitly providing 'else' for the assignment
                         val label = if (opt == "lefa") "Lefa" else if (opt == "owami") "Owami" else opt
 
                         Button(
@@ -367,7 +366,7 @@ fun GameScreen(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(bottom = 12.dp)
-                                .height(IntrinsicSize.Min) // Dynamic height for long text
+                                .height(IntrinsicSize.Min)
                         ) {
                             Text(label, color = TextPrimary, fontSize = 16.sp, modifier = Modifier.padding(vertical = 10.dp))
                         }
@@ -428,9 +427,9 @@ fun FinaleScreen(stats: Pair<Int, String>, onBack: () -> Unit) {
         ) {
             // Back Button (Top Left)
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Start) {
-                 TextButton(onClick = onBack) {
-                     Text("← Back", color = TextSecondary, fontWeight = FontWeight.Bold)
-                 }
+                TextButton(onClick = onBack) {
+                    Text("← Back", color = TextSecondary, fontWeight = FontWeight.Bold)
+                }
             }
 
             Icon(
