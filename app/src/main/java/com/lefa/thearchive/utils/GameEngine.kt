@@ -75,7 +75,7 @@ object GameEngine {
             questions.add(
                 Question(
                     type = QuestionType.GUESS_THE_REPLY,
-                    text = pair.original.content, // The context
+                    text = pair.original.joinToString("\n\n") { it.content }, // Context is the full block
                     correctAnswer = pair.reply.content,
                     options = options.shuffled(),
                     context = "What did ${pair.reply.author} reply?"

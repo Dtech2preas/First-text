@@ -11,7 +11,8 @@ import java.util.regex.Pattern
 
 object ChatParser {
 
-    private val PATTERN = Pattern.compile("^(\\d{4}/\\d{2}/\\d{2}), (\\d{1,2}:\\d{2}).?([ap]m) - (.*?): (.*)", Pattern.CASE_INSENSITIVE)
+    // Supports "2024/07/26, 9:31 pm" and "2024/07/26, 21:31"
+    private val PATTERN = Pattern.compile("^(\\d{4}/\\d{2}/\\d{2}), (\\d{1,2}:\\d{2}).?([ap]m)? - (.*?): (.*)", Pattern.CASE_INSENSITIVE)
 
     fun parseChat(fileContent: String): List<Message> {
         val lines = fileContent.split("\n")
@@ -29,6 +30,8 @@ object ChatParser {
                 var author = "unknown"
                 if (sender.contains("lefa", ignoreCase = true)) {
                     author = "lefa"
+                } else if (sender.contains("owami", ignoreCase = true)) {
+                    author = "owami"
                 } else {
                     author = "owami"
                 }
@@ -38,7 +41,7 @@ object ChatParser {
                 messages.add(
                     Message(
                         fullDate = dateStr,
-                        time = "$timeStr $ampm",
+                        time = "$timeStr $ampm".trim(),
                         timestamp = timestamp,
                         author = author,
                         content = content,
@@ -63,7 +66,14 @@ object ChatParser {
         val hourlyActivity = mutableMapOf<Int, Int>()
         val replyPairs = mutableListOf<ReplyPair>()
 
+        val firstOccurrences = mutableMapOf<String, Pair<String, Date>>()
+        var nocturnalMessages = 0
+        val messagesByDate = mutableMapOf<String, MutableList<Message>>()
+        val dayFormat = SimpleDateFormat("MM-dd", Locale.US)
+
         val specialWords = listOf("baby", "my love", "babe", "honey", "miss you")
+        val firstWordsToTrack = listOf("i love you", "baby", "my love")
+
         specialWords.forEach { word ->
             wordCounts[word] = mutableMapOf("lefa" to 0, "owami" to 0)
         }
@@ -91,25 +101,56 @@ object ChatParser {
                 }
             }
 
-            // Hourly Activity
+            // First Occurrences
+            firstWordsToTrack.forEach { word ->
+                if (contentLower.contains(word) && !firstOccurrences.containsKey(word)) {
+                    firstOccurrences[word] = Pair(msg.author, msg.timestamp)
+                }
+            }
+
+            // Hourly Activity & Nocturnal
             calendar.time = msg.timestamp
             val hour = calendar.get(Calendar.HOUR_OF_DAY)
             hourlyActivity[hour] = (hourlyActivity[hour] ?: 0) + 1
 
-            // Reply Pairs (for Game)
-            // Logic: If msg[i] is Lefa and msg[i+1] is Owami (or vice versa) and time diff < 1 hour
+            if (hour in 0..4) {
+                nocturnalMessages++
+            }
+
+            // On This Day
+            val dayKey = dayFormat.format(msg.timestamp)
+            if (!messagesByDate.containsKey(dayKey)) {
+                messagesByDate[dayKey] = mutableListOf()
+            }
+            messagesByDate[dayKey]?.add(msg)
+
+            // Reply Pairs logic with Grouping
             if (i < messages.size - 1) {
                 val nextMsg = messages[i + 1]
                 if (msg.author != nextMsg.author && msg.author != "unknown" && nextMsg.author != "unknown") {
+
+                    val block = mutableListOf<Message>()
+                    block.add(msg)
+
+                    var backIndex = i - 1
+                    var count = 0
+                    while (backIndex >= 0 && messages[backIndex].author == msg.author && count < 5) {
+                        block.add(0, messages[backIndex])
+                        backIndex--
+                        count++
+                    }
+
                     val timeDiff = nextMsg.timestamp.time - msg.timestamp.time
-                    // Check if within 1 hour (3600000 ms) and content is substantial
-                    if (timeDiff < 3600000 && msg.content.length > 5 && nextMsg.content.length > 5) {
-                        replyPairs.add(ReplyPair(msg, nextMsg))
+                    val combinedLength = block.sumOf { it.content.length }
+
+                    if (timeDiff < 3600000 && combinedLength > 5 && nextMsg.content.length > 5) {
+                        replyPairs.add(ReplyPair(block, nextMsg))
                     }
                 }
             }
         }
 
+        val startDate = if (messages.isNotEmpty()) messages.first().timestamp else Date()
         val dateRange = if (messages.isNotEmpty()) {
             val start = messages.first().fullDate
             val end = messages.last().fullDate
@@ -119,19 +160,24 @@ object ChatParser {
         return Stats(
             totalMessages = messages.size,
             dateRange = dateRange,
+            startDate = startDate,
             messageCounts = messageCounts,
             loveCounts = loveCounts,
             specificWordCounts = wordCounts,
             hourlyActivity = hourlyActivity,
-            replyPairs = replyPairs
+            replyPairs = replyPairs,
+            firstOccurrences = firstOccurrences,
+            nocturnalMessages = nocturnalMessages,
+            messagesByDate = messagesByDate
         )
     }
 
     private fun parseDate(dateStr: String, timeStr: String, ampm: String): Date {
         try {
             val formattedDateStr = dateStr.replace("/", "-")
-            val rawTime = "$formattedDateStr $timeStr $ampm"
-            val format = SimpleDateFormat("yyyy-MM-dd h:mm a", Locale.US)
+            val rawTime = if (ampm.isNotEmpty()) "$formattedDateStr $timeStr $ampm" else "$formattedDateStr $timeStr"
+            val pattern = if (ampm.isNotEmpty()) "yyyy-MM-dd h:mm a" else "yyyy-MM-dd HH:mm"
+            val format = SimpleDateFormat(pattern, Locale.US)
             return format.parse(rawTime) ?: Date()
         } catch (e: Exception) {
             return Date()
