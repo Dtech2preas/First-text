@@ -60,7 +60,7 @@ class MainActivity : ComponentActivity() {
             if (resId != 0) {
                 mediaPlayer = MediaPlayer.create(this, resId)
                 mediaPlayer?.isLooping = true
-                mediaPlayer?.volume = 0.5f
+                mediaPlayer?.setVolume(0.5f, 0.5f)
                 mediaPlayer?.start()
             }
         } catch (e: Exception) {
@@ -280,8 +280,9 @@ fun GameScreen(
     ) {
         // Header
         Text("KEYS: $keys / $maxKeys", color = Accent, fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 10.dp))
+        val progressValue = keys.toFloat() / maxKeys.toFloat()
         LinearProgressIndicator(
-            progress = keys.toFloat() / maxKeys.toFloat(),
+            progress = progressValue,
             modifier = Modifier
                 .fillMaxWidth()
                 .height(6.dp),
