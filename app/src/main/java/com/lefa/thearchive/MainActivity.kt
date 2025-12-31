@@ -4,11 +4,11 @@ import android.content.Context
 import android.media.MediaPlayer
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.compose.animation.*
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -33,17 +33,10 @@ import androidx.compose.ui.unit.sp
 import com.lefa.thearchive.model.Message
 import com.lefa.thearchive.model.Stats
 import com.lefa.thearchive.ui.theme.*
-import com.lefa.thearchive.utils.ChatParser
 import com.lefa.thearchive.utils.GameEngine
+import com.lefa.thearchive.utils.PrefsManager
 import com.lefa.thearchive.utils.Question
-import com.lefa.thearchive.utils.QuestionType
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.withContext
-import java.io.BufferedReader
-import java.io.InputStreamReader
-import java.text.SimpleDateFormat
-import java.util.Locale
 
 class MainActivity : ComponentActivity() {
     private var mediaPlayer: MediaPlayer? = null
@@ -83,12 +76,15 @@ fun TheArchiveApp() {
 
     // Game State
     var keys by remember { mutableStateOf(0) }
-    val KEYS_NEEDED = 5
+    val KEYS_NEEDED = 15 // Increased to 15
     var currentQuestion by remember { mutableStateOf<Question?>(null) }
+
+    // Victory State
+    var showVictoryAnimation by remember { mutableStateOf(false) }
+    var showHoohaaDialog by remember { mutableStateOf(false) }
 
     fun pickNextQuestion() {
         feedback = null
-        // Only WHO_SAID_IT is left
         currentQuestion = GameEngine.generateWhoSaidIt(messages, 1).firstOrNull()
     }
 
@@ -96,6 +92,10 @@ fun TheArchiveApp() {
         keys = 0
         pickNextQuestion()
         screen = "GAME"
+    }
+
+    val skipGame = {
+        screen = "DASHBOARD"
     }
 
     val handleAnswer = { answer: String ->
@@ -106,6 +106,8 @@ fun TheArchiveApp() {
                 keys++
             } else {
                 feedback = "WRONG"
+                // Deduct point, min 0
+                if (keys > 0) keys--
             }
         }
         Unit
@@ -115,8 +117,10 @@ fun TheArchiveApp() {
         if (feedback != null) {
             delay(1500)
             if (feedback == "CORRECT" && keys >= KEYS_NEEDED) {
-                screen = "DASHBOARD"
-                feedback = null
+                // Game Won Logic
+                PrefsManager.setGameWon(context, true)
+                showHoohaaDialog = true
+                feedback = null // Clear feedback to show dialog
             } else {
                 pickNextQuestion()
             }
@@ -129,16 +133,65 @@ fun TheArchiveApp() {
             .background(Brush.verticalGradient(listOf(RoseBackground, PureWhite)))
     ) {
         when (screen) {
-            "LOADING" -> LoadingScreen(onParsingComplete = { stats ->
-                statsData = stats
-                messages = stats.messagesByDate.values.flatten()
-                screen = "INTRO"
-            })
+            "LOADING" -> LoadingScreen(
+                onParsingComplete = { stats ->
+                    statsData = stats
+                    messages = stats.messagesByDate.values.flatten()
+                    screen = "INTRO"
+                },
+                onStartMeantimeQuiz = {
+                    screen = "MEANTIME"
+                }
+            )
+            "MEANTIME" -> MeantimeQuizScreen {
+                // When done with Meantime, go back to loading (or stay there if loaded, waiting for user to click Enter)
+                // Actually, user said: "Wait till we finish typing and manually press the seach button" ... wait, that's dashboard.
+                // For meantime, "whill will be some questions for keep her busy while it loads".
+                // If it finishes, we can probably go back to Loading screen which likely has the "Enter" button ready now.
+                screen = "LOADING"
+            }
             "ERROR" -> ErrorScreen(feedback ?: "Unknown Error") { }
-            "INTRO" -> statsData?.let { IntroScreen(Pair(it.totalMessages, it.dateRange), startGame) }
-            "GAME" -> GameScreen(keys, KEYS_NEEDED, currentQuestion, feedback, handleAnswer)
+            "INTRO" -> statsData?.let {
+                IntroScreen(
+                    stats = Pair(it.totalMessages, it.dateRange),
+                    onStart = startGame,
+                    onSkip = if (PrefsManager.isGameWon(context)) skipGame else null
+                )
+            }
+            "GAME" -> {
+                if (showVictoryAnimation) {
+                    VictoryAnimation {
+                        showVictoryAnimation = false
+                        screen = "DASHBOARD"
+                    }
+                } else if (showHoohaaDialog) {
+                    AlertDialog(
+                        onDismissRequest = {}, // Force user to read it
+                        title = { Text("Congratulations!", fontWeight = FontWeight.Bold, color = DeepLove) },
+                        text = { Text("You have a nice hoohaa just so you know...", fontSize = 18.sp) },
+                        confirmButton = {
+                            Button(
+                                onClick = {
+                                    showHoohaaDialog = false
+                                    showVictoryAnimation = true
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = DeepLove)
+                            ) {
+                                Text("Continue")
+                            }
+                        }
+                    )
+                } else {
+                    GameScreen(keys, KEYS_NEEDED, currentQuestion, feedback, handleAnswer)
+                }
+            }
             "DASHBOARD" -> statsData?.let { DashboardScreen(it) { screen = "FINALE" } }
-            "FINALE" -> statsData?.let { FinaleScreen(Pair(it.totalMessages, it.dateRange)) }
+            "FINALE" -> statsData?.let {
+                FinaleScreen(
+                    stats = Pair(it.totalMessages, it.dateRange),
+                    onBack = { screen = "DASHBOARD" }
+                )
+            }
         }
     }
 }
@@ -156,7 +209,7 @@ fun ErrorScreen(msg: String, onRetry: () -> Unit) {
 }
 
 @Composable
-fun IntroScreen(stats: Pair<Int, String>, onStart: () -> Unit) {
+fun IntroScreen(stats: Pair<Int, String>, onStart: () -> Unit, onSkip: (() -> Unit)?) {
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -217,6 +270,15 @@ fun IntroScreen(stats: Pair<Int, String>, onStart: () -> Unit) {
             shape = RoundedCornerShape(25.dp)
         ) {
             Text("START THE JOURNEY", color = Color.White, fontWeight = FontWeight.Bold)
+        }
+
+        if (onSkip != null) {
+            TextButton(
+                onClick = onSkip,
+                modifier = Modifier.padding(top = 10.dp)
+            ) {
+                Text("Go to Dashboard (You already won)", color = TextSecondary)
+            }
         }
     }
 }
@@ -344,8 +406,13 @@ fun GameScreen(
 }
 
 @Composable
-fun FinaleScreen(stats: Pair<Int, String>) {
+fun FinaleScreen(stats: Pair<Int, String>, onBack: () -> Unit) {
     val scrollState = rememberScrollState()
+
+    // Handle Android Back Button
+    BackHandler {
+        onBack()
+    }
 
     Box(
         modifier = Modifier
@@ -359,6 +426,13 @@ fun FinaleScreen(stats: Pair<Int, String>) {
                 .padding(30.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
+            // Back Button (Top Left)
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Start) {
+                 TextButton(onClick = onBack) {
+                     Text("← Back", color = TextSecondary, fontWeight = FontWeight.Bold)
+                 }
+            }
+
             Icon(
                 imageVector = Icons.Default.Favorite,
                 contentDescription = null,

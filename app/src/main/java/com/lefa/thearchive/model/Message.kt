@@ -1,5 +1,6 @@
 package com.lefa.thearchive.model
 
+import java.io.Serializable
 import java.util.Date
 
 data class Message(
@@ -9,4 +10,4 @@ data class Message(
     val author: String,
     val content: String,
     val originalSender: String
-)
+) : Serializable

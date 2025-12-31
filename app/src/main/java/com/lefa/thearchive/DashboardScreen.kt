@@ -33,6 +33,7 @@ import java.util.concurrent.TimeUnit
 @Composable
 fun DashboardScreen(stats: Stats, onContinue: () -> Unit) {
     val scrollState = rememberScrollState()
+    var inputText by remember { mutableStateOf("") }
     var searchQuery by remember { mutableStateOf("") }
     val focusManager = LocalFocusManager.current
 
@@ -57,22 +58,44 @@ fun DashboardScreen(stats: Stats, onContinue: () -> Unit) {
                 modifier = Modifier.padding(vertical = 20.dp)
             )
 
-            // --- SEARCH SECTION ---
-            OutlinedTextField(
-                value = searchQuery,
-                onValueChange = { searchQuery = it },
-                label = { Text("Search our memories...", color = TextSecondary) },
-                leadingIcon = { Icon(Icons.Default.Search, contentDescription = "Search", tint = DeepLove) },
-                colors = TextFieldDefaults.outlinedTextFieldColors(
-                    focusedBorderColor = DeepLove,
-                    unfocusedBorderColor = SoftAccent
-                ),
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(15.dp),
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() })
-            )
+            // --- SEARCH SECTION (MANUAL) ---
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                OutlinedTextField(
+                    value = inputText,
+                    onValueChange = { inputText = it },
+                    label = { Text("Search our memories...", color = TextSecondary) },
+                    colors = TextFieldDefaults.outlinedTextFieldColors(
+                        focusedBorderColor = DeepLove,
+                        unfocusedBorderColor = SoftAccent
+                    ),
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(15.dp),
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                    keyboardActions = KeyboardActions(onSearch = {
+                        searchQuery = inputText
+                        focusManager.clearFocus()
+                    })
+                )
+
+                Spacer(modifier = Modifier.width(8.dp))
+
+                Button(
+                    onClick = {
+                        searchQuery = inputText
+                        focusManager.clearFocus()
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = DeepLove),
+                    shape = RoundedCornerShape(15.dp),
+                    contentPadding = PaddingValues(0.dp),
+                    modifier = Modifier.size(56.dp)
+                ) {
+                    Icon(Icons.Default.Search, contentDescription = "Search", tint = Color.White)
+                }
+            }
 
             if (searchQuery.isNotEmpty()) {
                 Spacer(modifier = Modifier.height(10.dp))
@@ -142,8 +165,6 @@ data class SearchMetrics(
 
 @Composable
 fun SearchResultCard(stats: Stats, query: String) {
-    val lowerQuery = query.lowercase()
-
     // Wrap heavy calculation in remember to prevent re-computation on every frame
     val metrics = remember(query, stats) {
         var lefaCount = 0
