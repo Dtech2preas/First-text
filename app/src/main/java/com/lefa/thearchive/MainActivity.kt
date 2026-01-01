@@ -1,11 +1,10 @@
 package com.lefa.thearchive
 
-import android.content.Context
-import android.media.MediaPlayer
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
+import androidx.activity.viewModels
 import androidx.compose.animation.*
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -16,6 +15,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -30,8 +30,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.lefa.thearchive.data.ArchiveRepository
 import com.lefa.thearchive.model.Message
 import com.lefa.thearchive.model.Stats
+import com.lefa.thearchive.ui.MainViewModel
+import com.lefa.thearchive.ui.SearchScreen
 import com.lefa.thearchive.ui.theme.*
 import com.lefa.thearchive.utils.GameEngine
 import com.lefa.thearchive.utils.PrefsManager
@@ -39,40 +42,26 @@ import com.lefa.thearchive.utils.Question
 import kotlinx.coroutines.delay
 
 class MainActivity : ComponentActivity() {
-    private var mediaPlayer: MediaPlayer? = null
+    private val viewModel: MainViewModel by viewModels()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        try {
-            val resId = resources.getIdentifier("music", "raw", packageName)
-            if (resId != 0) {
-                mediaPlayer = MediaPlayer.create(this, resId)
-                mediaPlayer?.isLooping = true
-                mediaPlayer?.setVolume(0.5f, 0.5f)
-                mediaPlayer?.start()
-            }
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
         setContent {
-            TheArchiveApp()
+            TheArchiveApp(viewModel)
         }
-    }
-
-    override fun onDestroy() {
-        super.onDestroy()
-        mediaPlayer?.release()
-        mediaPlayer = null
     }
 }
 
 @Composable
-fun TheArchiveApp() {
+fun TheArchiveApp(viewModel: MainViewModel) {
     val context = LocalContext.current
     var screen by remember { mutableStateOf("LOADING") }
     var messages by remember { mutableStateOf<List<Message>>(emptyList()) }
     var statsData by remember { mutableStateOf<Stats?>(null) }
     var feedback by remember { mutableStateOf<String?>(null) }
+
+    // Search State
+    var showSearch by remember { mutableStateOf(false) }
 
     // Game State
     var keys by remember { mutableStateOf(0) }
@@ -83,31 +72,14 @@ fun TheArchiveApp() {
     var showVictoryAnimation by remember { mutableStateOf(false) }
     var showHoohaaDialog by remember { mutableStateOf(false) }
 
+    // Observe Loading State
+    val loadingState by viewModel.loadingState.collectAsState()
+
     fun pickNextQuestion() {
         feedback = null
-        // Hardcoded stats don't expose list of messages directly for quiz generation in the same way.
-        // We need to parse or use dummy questions if messages list is empty.
-        // For now, let's assume we can't generate new dynamic questions without parsing.
-        // BUT the user asked to "hardcode info".
-        // The GameEngine.stats is available.
-        // However, generating questions requires the raw messages list which we skipped parsing to save time.
-        // Option: Parse messages in background for the quiz? Or skip the quiz part?
-        // User said: "play the in the meantime gave"
-        // Let's rely on GameEngine generating something or just use the hardcoded logic if possible.
-        // Actually, LoadingScreen still calls onParsingComplete with stats.
-        // We will just use the hardcoded stats but for the Game to work we need Messages.
-        // Let's assume we might need to parse for the game, OR we just let the Dashboard work.
-        // The user prioritized the "Fixed Database" for loading.
-
-        // If messages are empty, we can't play the main game properly.
-        // We should probably rely on parsing in background if the user wants to play the game.
-        // But for the Dashboard, we use hardcoded stats.
-
-        // Fix: Use GameEngine.generateWhoSaidIt if messages exist.
         if (messages.isNotEmpty()) {
              currentQuestion = GameEngine.generateWhoSaidIt(messages, 1).firstOrNull()
         } else {
-            // Fallback if no messages parsed yet
              currentQuestion = Question(com.lefa.thearchive.utils.QuestionType.WHO_SAID_IT, "Loading questions...", "lefa", listOf("lefa", "owami"))
         }
     }
@@ -161,11 +133,9 @@ fun TheArchiveApp() {
     ) {
         when (screen) {
             "LOADING" -> LoadingScreen(
-                onParsingComplete = { stats ->
+                loadingState = loadingState,
+                onEnterClick = { stats ->
                     statsData = stats
-                    // If we used hardcoded stats, messagesByDate might be empty.
-                    // If so, we might not be able to play the 'Who Said It' game immediately.
-                    // But the Dashboard will work.
                     messages = stats.messagesByDate.values.flatten()
                     screen = "INTRO"
                 },
@@ -174,6 +144,7 @@ fun TheArchiveApp() {
                 }
             )
             "MEANTIME" -> MeantimeQuizScreen {
+                // Navigate back to Loading, which will show Enter button instantly if ready
                 screen = "LOADING"
             }
             "ERROR" -> ErrorScreen(feedback ?: "Unknown Error") { }
@@ -220,8 +191,32 @@ fun TheArchiveApp() {
                 )
             }
         }
+
+        // --- GLOBAL FLOATING SEARCH BUTTON ---
+        // Show on every screen EXCEPT Loading, Meantime, and Error
+        if (screen != "LOADING" && screen != "MEANTIME" && screen != "ERROR") {
+            Box(modifier = Modifier.fillMaxSize().padding(20.dp), contentAlignment = Alignment.BottomEnd) {
+                FloatingActionButton(
+                    onClick = { showSearch = true },
+                    containerColor = DeepLove,
+                    contentColor = Color.White
+                ) {
+                    Icon(Icons.Default.Search, contentDescription = "Search Memories")
+                }
+            }
+        }
+
+        // --- SEARCH OVERLAY ---
+        if (showSearch) {
+            SearchScreen(
+                viewModel = viewModel,
+                onClose = { showSearch = false }
+            )
+        }
     }
 }
+
+// ... ErrorScreen, IntroScreen, GameScreen, FinaleScreen kept as is (just ensure imports match) ...
 
 @Composable
 fun ErrorScreen(msg: String, onRetry: () -> Unit) {
