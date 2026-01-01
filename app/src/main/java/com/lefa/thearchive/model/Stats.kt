@@ -6,19 +6,42 @@ import java.util.Date
 data class Stats(
     val totalMessages: Int,
     val dateRange: String,
-    val startDate: Date, // Added for calculations
-    val messageCounts: Map<String, Int>, // "lefa" -> 100, "owami" -> 120
-    val loveCounts: Map<String, Int>, // "lefa" -> 50, "owami" -> 60 (said "I love you")
-    val specificWordCounts: Map<String, Map<String, Int>>, // "Baby" -> {"lefa": 10, ...}
-    val hourlyActivity: Map<Int, Int>, // Hour (0-23) -> Count
-    val replyPairs: List<ReplyPair>, // For "Guess the Reply" game
-    // New Fields
-    val firstOccurrences: Map<String, Pair<String, Date>>, // "I love you" -> ("lefa", Date)
+    val startDate: Date,
+    val messageCounts: Map<String, Int>,
+    val loveCounts: Map<String, Int>,
+    val specificWordCounts: Map<String, Map<String, Int>>,
+    val hourlyActivity: Map<Int, Int>,
+    val replyPairs: List<ReplyPair>,
+    val firstOccurrences: Map<String, Pair<String, Date>>,
     val nocturnalMessages: Int,
-    val messagesByDate: Map<String, List<Message>> // "MM-dd" -> List<Message> for "On This Day"
+    val messagesByDate: Map<String, List<Message>>,
+    // New Fields
+    val lefaMsgs: Int = 0,
+    val owamiMsgs: Int = 0,
+    val lefaChars: Int = 0,
+    val owamiChars: Int = 0,
+    val lefaWords: Int = 0,
+    val owamiWords: Int = 0,
+    val lefaEmojis: Int = 0,
+    val owamiEmojis: Int = 0,
+    val lefaMedia: Int = 0,
+    val owamiMedia: Int = 0,
+    val lefaLove: Int = 0,
+    val owamiLove: Int = 0,
+    val lefaNaughty: Int = 0,
+    val owamiNaughty: Int = 0,
+    val lefaAnnoyed: Int = 0,
+    val owamiAnnoyed: Int = 0,
+    val lefaConsecutive: Int = 0,
+    val owamiConsecutive: Int = 0,
+    val lefaRoutine: Map<String, Int> = emptyMap(),
+    val owamiRoutine: Map<String, Int> = emptyMap(),
+    val lefaActions: Map<String, Int> = emptyMap(),
+    val owamiActions: Map<String, Int> = emptyMap(),
+    val firstSigns: List<String> = emptyList()
 ) : Serializable
 
 data class ReplyPair(
-    val original: List<Message>, // Changed to list for consecutive messages
+    val original: List<Message>,
     val reply: Message
 ) : Serializable
