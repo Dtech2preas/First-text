@@ -171,7 +171,7 @@ fun MeantimeQuizScreen(onFinished: () -> Unit) {
                        backgroundColor = RoseBackground // Reset for next
                    }, 2000)
 
-                }, 3000)
+                }, 5000)
             }
             7 -> { // Love (Logic handled in UI input mostly, but button can force next if manually typed 'no' somehow)
                  // If she somehow bypasses logic, we just move on
