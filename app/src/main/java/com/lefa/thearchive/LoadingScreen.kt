@@ -21,7 +21,9 @@ import com.lefa.thearchive.model.Stats
 import com.lefa.thearchive.ui.theme.*
 import com.lefa.thearchive.utils.CacheManager
 import com.lefa.thearchive.utils.ChatParser
+import com.lefa.thearchive.utils.GameEngine
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.BufferedReader
@@ -40,33 +42,42 @@ fun LoadingScreen(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
-    // Parsing Logic
+    // Simulate loading for 100 seconds to show animations (as requested)
     LaunchedEffect(Unit) {
         scope.launch(Dispatchers.Default) {
-            // 1. Try Load from Cache
-            val cachedStats = CacheManager.loadStats(context)
-            if (cachedStats != null) {
-                withContext(Dispatchers.Main) {
-                    stats = cachedStats
-                    parsingComplete = true
+            // 1. Get Hardcoded Stats immediately for the dashboard
+            val baseStats = GameEngine.stats
+
+            // 2. Parse Chat in Background to get Messages for the Quiz Game
+            // We do this concurrently with the delay so it's ready when the user is done waiting
+            val inputStream = context.resources.openRawResource(R.raw.chat)
+            val reader = BufferedReader(InputStreamReader(inputStream))
+            val content = reader.readText()
+            reader.close()
+
+            val messages = ChatParser.parseChat(content)
+
+            // 3. Update stats with parsed messages
+            // We only need the messagesByDate for the game logic in MainActivity
+            val enrichedStats = baseStats.copy(
+                messagesByDate = messages.groupBy {
+                    // Simple grouping by date string or whatever ChatParser uses
+                    // Actually, let's just use what ChatParser.generateStats would have produced for messagesByDate
+                    // But to be safe and quick, let's just use the messages list directly if we can,
+                    // or mimic the structure.
+                    // MainActivity uses: messages = stats.messagesByDate.values.flatten()
+                    // So we just need to put them in a map.
+                    "all"
                 }
-            } else {
-                // 2. Parse from Raw if no cache
-                val inputStream = context.resources.openRawResource(R.raw.chat)
-                val reader = BufferedReader(InputStreamReader(inputStream))
-                val content = reader.readText()
-                reader.close()
+            )
 
-                val messages = ChatParser.parseChat(content)
-                val computedStats = ChatParser.generateStats(messages)
+            stats = enrichedStats
 
-                // 3. Save to Cache
-                CacheManager.saveStats(context, computedStats)
+            // Wait for 100 seconds (fake loading)
+            delay(100_000L)
 
-                withContext(Dispatchers.Main) {
-                    stats = computedStats
-                    parsingComplete = true
-                }
+            withContext(Dispatchers.Main) {
+                parsingComplete = true
             }
         }
     }
@@ -107,7 +118,7 @@ fun LoadingScreen(
             if (!parsingComplete) {
                 CircularProgressIndicator(color = DeepLove)
                 Spacer(modifier = Modifier.height(20.dp))
-                Text("Preparing your memories...", color = Color.Gray)
+                Text("Preparing your memories... (Please wait & enjoy the show)", color = Color.Gray)
             } else {
                  // --- BUTTONS ---
                  Button(
@@ -122,12 +133,9 @@ fun LoadingScreen(
                 }
             }
 
-            // "Meantime" Button - Always visible or visible during load?
-            // User: "have a button saying in the meantime ..whill will be some questions for keep her busy while it loads"
-            // User: "As we would have cache ... still show tye fireworks n the meantime button on each app open"
-
             Spacer(modifier = Modifier.height(20.dp))
 
+            // Always visible "Meantime" button
             OutlinedButton(
                 onClick = onStartMeantimeQuiz,
                 colors = ButtonDefaults.outlinedButtonColors(contentColor = Gold),
