@@ -1,6 +1,6 @@
 package com.lefa.thearchive
 
-import androidx.compose.animation.core.* // Fixed: Added for tween, RepeatMode, infiniteRepeatable
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -29,7 +29,6 @@ import kotlinx.coroutines.launch
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun DashboardPages(onNavigateBack: () -> Unit) {
-    // Stats are already loaded in GameEngine.stats if we are here
     val stats = GameEngine.stats
     val pagerState = rememberPagerState(pageCount = { 5 })
     val scope = rememberCoroutineScope()
@@ -87,7 +86,7 @@ fun DashboardPages(onNavigateBack: () -> Unit) {
 @Composable
 fun InfoCard(
     title: String,
-    content: @ComposableColumnScope.() -> Unit
+    content: @Composable ColumnScope.() -> Unit // FIXED: Added space between @Composable and ColumnScope
 ) {
     Card(
         modifier = Modifier
@@ -163,7 +162,7 @@ fun OverviewPage(stats: com.lefa.thearchive.model.Stats) {
 
         InfoCard("Total Interaction") {
             StatItem("", "Lefa", "Owami", isHeader = true)
-            Divider(color = RoseSurface, modifier = Modifier.padding(vertical = 8.dp))
+            HorizontalDivider(color = RoseSurface, modifier = Modifier.padding(vertical = 8.dp))
             StatItem("Messages", "${stats.lefaMsgs}", "${stats.owamiMsgs}")
             StatItem("Words", "${stats.lefaWords}", "${stats.owamiWords}")
             StatItem("Characters", "${stats.lefaChars}", "${stats.owamiChars}")
@@ -198,7 +197,7 @@ fun LoveStatsPage(stats: com.lefa.thearchive.model.Stats) {
 
         InfoCard("Expressions of Love") {
             StatItem("", "Lefa", "Owami", isHeader = true)
-            Divider(color = RoseSurface, modifier = Modifier.padding(vertical = 8.dp))
+            HorizontalDivider(color = RoseSurface, modifier = Modifier.padding(vertical = 8.dp))
             StatItem("'I Love You'", "${stats.lefaLove}", "${stats.owamiLove}")
         }
 
@@ -233,9 +232,8 @@ fun ActivityStatsPage(stats: com.lefa.thearchive.model.Stats) {
 
         InfoCard("Daily Life") {
              StatItem("", "Lefa", "Owami", isHeader = true)
-             Divider(color = RoseSurface, modifier = Modifier.padding(vertical = 8.dp))
+             HorizontalDivider(color = RoseSurface, modifier = Modifier.padding(vertical = 8.dp))
 
-             // Combine keys from both maps
              val allKeys = (stats.lefaRoutine.keys + stats.owamiRoutine.keys).distinct()
 
              allKeys.forEach { key ->
@@ -262,7 +260,6 @@ fun ActivityStatsPage(stats: com.lefa.thearchive.model.Stats) {
 
 @Composable
 fun NaughtyStatsPage(stats: com.lefa.thearchive.model.Stats) {
-    // Subtle animation for "Alive" feel
     val infiniteTransition = rememberInfiniteTransition()
     val alpha by infiniteTransition.animateFloat(
         initialValue = 0.7f,
@@ -288,14 +285,13 @@ fun NaughtyStatsPage(stats: com.lefa.thearchive.model.Stats) {
 
         InfoCard("Heat Level") {
              StatItem("", "Lefa", "Owami", isHeader = true)
-             Divider(color = RoseSurface, modifier = Modifier.padding(vertical = 8.dp))
+             HorizontalDivider(color = RoseSurface, modifier = Modifier.padding(vertical = 8.dp))
              StatItem("Spice Count", "${stats.lefaNaughty}", "${stats.owamiNaughty}")
              StatItem("Slightly Mad", "${stats.lefaAnnoyed}", "${stats.owamiAnnoyed}")
         }
 
         Spacer(modifier = Modifier.height(20.dp))
 
-        // Animated Emoji Box
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -306,7 +302,7 @@ fun NaughtyStatsPage(stats: com.lefa.thearchive.model.Stats) {
             Text(
                 "🍆 🍑 💦",
                 fontSize = 50.sp,
-                color = Color.White.copy(alpha = alpha) // Pulsing alpha
+                color = Color.White.copy(alpha = alpha)
             )
         }
     }
