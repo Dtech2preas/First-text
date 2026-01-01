@@ -117,7 +117,7 @@ fun LoadingScreen(
             Text("Made by D-TECH", color = Color.LightGray, fontSize = 12.sp, fontWeight = FontWeight.Bold)
             Text("In association with Preasx24", color = Color.Gray, fontSize = 10.sp)
             Spacer(modifier = Modifier.height(4.dp))
-            Text("For Owami Mcube", color = DeepLove, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+            Text("For Owami Nonhle Mncube", color = DeepLove, fontSize = 12.sp, fontWeight = FontWeight.Bold)
         }
     }
 }
