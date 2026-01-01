@@ -132,7 +132,8 @@ fun PageRoutines(stats: Stats) {
         Text("What we talk about...", color = Color.Gray)
         Spacer(modifier = Modifier.height(24.dp))
 
-        stats.actions.forEach { (action, counts) ->
+        // Fixed: Explicit iteration over map entries
+        for ((action, counts) in stats.actions) {
             RoutineRow(
                 action = action.replace("_", " ").capitalize(),
                 lefaCount = counts.first,
