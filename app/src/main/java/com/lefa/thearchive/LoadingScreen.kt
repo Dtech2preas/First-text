@@ -18,14 +18,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.lefa.thearchive.model.Stats
+import com.lefa.thearchive.model.StaticStats
 import com.lefa.thearchive.ui.theme.*
 import com.lefa.thearchive.utils.CacheManager
-import com.lefa.thearchive.utils.ChatParser
-import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import java.io.BufferedReader
-import java.io.InputStreamReader
 import kotlin.math.cos
 import kotlin.math.sin
 import kotlin.random.Random
@@ -35,40 +32,21 @@ fun LoadingScreen(
     onParsingComplete: (Stats) -> Unit,
     onStartMeantimeQuiz: () -> Unit
 ) {
-    var parsingComplete by remember { mutableStateOf(false) }
-    var stats by remember { mutableStateOf<Stats?>(null) }
-    val context = LocalContext.current
+    var progress by remember { mutableStateOf(0f) }
+    var isReady by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
-    // Parsing Logic
+    // Fake Loading Logic - 100 Seconds
     LaunchedEffect(Unit) {
-        scope.launch(Dispatchers.Default) {
-            // 1. Try Load from Cache
-            val cachedStats = CacheManager.loadStats(context)
-            if (cachedStats != null) {
-                withContext(Dispatchers.Main) {
-                    stats = cachedStats
-                    parsingComplete = true
-                }
-            } else {
-                // 2. Parse from Raw if no cache
-                val inputStream = context.resources.openRawResource(R.raw.chat)
-                val reader = BufferedReader(InputStreamReader(inputStream))
-                val content = reader.readText()
-                reader.close()
+        val totalTime = 100_000L // 100 seconds
+        val interval = 100L
+        val steps = totalTime / interval
 
-                val messages = ChatParser.parseChat(content)
-                val computedStats = ChatParser.generateStats(messages)
-
-                // 3. Save to Cache
-                CacheManager.saveStats(context, computedStats)
-
-                withContext(Dispatchers.Main) {
-                    stats = computedStats
-                    parsingComplete = true
-                }
-            }
+        for (i in 1..steps) {
+            delay(interval)
+            progress = i.toFloat() / steps
         }
+        isReady = true
     }
 
     Box(
@@ -104,30 +82,35 @@ fun LoadingScreen(
 
             Spacer(modifier = Modifier.height(50.dp))
 
-            if (!parsingComplete) {
-                CircularProgressIndicator(color = DeepLove)
+            if (!isReady) {
+                CircularProgressIndicator(
+                    progress = progress,
+                    color = DeepLove,
+                    modifier = Modifier.size(60.dp),
+                    strokeWidth = 6.dp
+                )
                 Spacer(modifier = Modifier.height(20.dp))
-                Text("Preparing your memories...", color = Color.Gray)
+                Text(
+                    "Analyzing ${StaticStats.data.totalMessages} memories... ${(progress * 100).toInt()}%",
+                    color = Color.Gray
+                )
             } else {
                  // --- BUTTONS ---
                  Button(
-                    onClick = { stats?.let { onParsingComplete(it) } },
+                    onClick = { onParsingComplete(StaticStats.data) },
                     colors = ButtonDefaults.buttonColors(containerColor = DeepLove),
                     shape = RoundedCornerShape(25.dp),
                     modifier = Modifier
                         .height(50.dp)
                         .width(200.dp)
                 ) {
-                    Text("ENTER", color = Color.White, fontWeight = FontWeight.Bold)
+                    Text("ENTER ARCHIVE", color = Color.White, fontWeight = FontWeight.Bold)
                 }
             }
 
-            // "Meantime" Button - Always visible or visible during load?
-            // User: "have a button saying in the meantime ..whill will be some questions for keep her busy while it loads"
-            // User: "As we would have cache ... still show tye fireworks n the meantime button on each app open"
+            Spacer(modifier = Modifier.height(30.dp))
 
-            Spacer(modifier = Modifier.height(20.dp))
-
+            // "Meantime" Button - Always visible to keep her busy
             OutlinedButton(
                 onClick = onStartMeantimeQuiz,
                 colors = ButtonDefaults.outlinedButtonColors(contentColor = Gold),
@@ -135,9 +118,9 @@ fun LoadingScreen(
                 shape = RoundedCornerShape(25.dp),
                 modifier = Modifier
                     .height(50.dp)
-                    .width(200.dp)
+                    .width(240.dp)
             ) {
-                Text("IN THE MEANTIME...", fontWeight = FontWeight.Bold)
+                Text("IN THE MEANTIME... (QUIZ)", fontWeight = FontWeight.Bold)
             }
         }
 
