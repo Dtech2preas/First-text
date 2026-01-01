@@ -101,11 +101,15 @@ fun PageInteractive(onComplete: () -> Unit) {
 }
 
 @Composable
-fun PageVerdict(stats: Stats) {
+fun PageVerdict(stats: Stats, onNext: () -> Unit) {
     Column(Modifier.fillMaxSize().padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
         Text("THE VERDICT", fontSize = 32.sp, fontWeight = FontWeight.Bold, color = Gold); Spacer(Modifier.height(20.dp))
         Text("You are both obsessed with each other.", fontSize = 24.sp, color = DeepLove, textAlign = TextAlign.Center); Spacer(Modifier.height(30.dp))
         Text("FOREVER TO GO ❤️", fontSize = 20.sp, color = Gold)
+        Spacer(Modifier.height(30.dp))
+        Button(onClick = onNext, colors = ButtonDefaults.buttonColors(containerColor = DeepLove)) {
+            Text("See Finale", color = Color.White)
+        }
     }
 }
 

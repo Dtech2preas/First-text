@@ -38,10 +38,6 @@ data class Stats(
     val messagesByDate: Map<String, List<Message>> = emptyMap()
 ) : Serializable
 
-data class SignEvent(val date: String, val sender: String, val phrase: String, val message: String) : Serializable
-data class ReplyPair(val original: List<Message>, val reply: Message) : Serializable
-data class Message(val sender: String, val content: String, val timestamp: Date) : Serializable
-
 object StaticStats {
     val data = Stats(
         totalMessages = 87615, totalWords = 500967, totalEmojis = 51606, mediaCount = 13235,
