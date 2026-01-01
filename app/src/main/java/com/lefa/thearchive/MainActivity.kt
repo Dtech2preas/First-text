@@ -482,7 +482,7 @@ We've shared ${stats.first} messages since ${stats.second.substringBefore(",")}.
 Each one is a piece of the beautiful puzzle that is 'Us'.
 
 Thank you for being my partner, my love, and my best friend.
-I can't wait to create more memories with you.
+I can't wait to create more memories with you. and see your private parts as if they were mine.
 
 I love you.
 
