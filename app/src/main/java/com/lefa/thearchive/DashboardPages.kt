@@ -1,6 +1,7 @@
 package com.lefa.thearchive
 
-import androidx.compose.animation.*
+import androidx.compose.animation.core.* // Fixed: Added for tween, RepeatMode, infiniteRepeatable
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -10,7 +11,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Favorite
-import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -24,13 +24,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.lefa.thearchive.ui.theme.*
 import com.lefa.thearchive.utils.GameEngine
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
-@OptIn(ExperimentalFoundationApi::class) // For Pager
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun DashboardPages(onNavigateBack: () -> Unit) {
-    // Stats are already loaded in GameEngine.stats if we are here (from MainActivity logic)
+    // Stats are already loaded in GameEngine.stats if we are here
     val stats = GameEngine.stats
     val pagerState = rememberPagerState(pageCount = { 5 })
     val scope = rememberCoroutineScope()
@@ -186,7 +185,7 @@ fun LoveStatsPage(stats: com.lefa.thearchive.model.Stats) {
             .padding(24.dp)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(Icons.Default.Favorite, contentDescription = null, tint = DeepLove)
+            Icon(Icons.Filled.Favorite, contentDescription = null, tint = DeepLove)
             Spacer(modifier = Modifier.width(8.dp))
             Text(
                 "Romance",
@@ -201,11 +200,6 @@ fun LoveStatsPage(stats: com.lefa.thearchive.model.Stats) {
             StatItem("", "Lefa", "Owami", isHeader = true)
             Divider(color = RoseSurface, modifier = Modifier.padding(vertical = 8.dp))
             StatItem("'I Love You'", "${stats.lefaLove}", "${stats.owamiLove}")
-
-            stats.firstSigns.forEachIndexed { index, phrase ->
-                // This is a simplified display as firstSigns is a flat list
-                 // Ideally we'd map this better but sticking to data structure
-            }
         }
 
         InfoCard("First Signs") {
