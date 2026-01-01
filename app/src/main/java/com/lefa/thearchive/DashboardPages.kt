@@ -163,11 +163,11 @@ fun OverviewPage(stats: com.lefa.thearchive.model.Stats) {
         InfoCard("Total Interaction") {
             StatItem("", "Lefa", "Owami", isHeader = true)
             Divider(color = RoseSurface, modifier = Modifier.padding(vertical = 8.dp))
-            StatItem("Messages", "${stats.lefaMsgs}", "${stats.owamiMsgs}")
-            StatItem("Words", "${stats.lefaWords}", "${stats.owamiWords}")
-            StatItem("Characters", "${stats.lefaChars}", "${stats.owamiChars}")
-            StatItem("Emojis", "${stats.lefaEmojis}", "${stats.owamiEmojis}")
-            StatItem("Media", "${stats.lefaMedia}", "${stats.owamiMedia}")
+            StatItem("Messages_sent", "${stats.lefaMsgs}", "${stats.owamiMsgs}")
+            StatItem("Words_sent", "${stats.lefaWords}", "${stats.owamiWords}")
+            StatItem("Characters_sent", "${stats.lefaChars}", "${stats.owamiChars}")
+            StatItem("Emojis_sent", "${stats.lefaEmojis}", "${stats.owamiEmojis}")
+            StatItem("pic/vids", "${stats.lefaMedia}", "${stats.owamiMedia}")
         }
 
         InfoCard("Consecutive Messages") {
@@ -203,7 +203,7 @@ fun LoveStatsPage(stats: com.lefa.thearchive.model.Stats) {
 
         InfoCard("First Signs") {
              Text(
-                "Who said it first?",
+                "Who said I love you first?",
                 fontWeight = FontWeight.Bold,
                 color = TextPrimary,
                 modifier = Modifier.padding(bottom = 8.dp)
@@ -321,7 +321,7 @@ fun FinalePage(onNavigateBack: () -> Unit) {
         verticalArrangement = Arrangement.Center
     ) {
         Text(
-            "One Last Thing...",
+            "touch my dick🍆 🤭❤️...",
             fontSize = 28.sp,
             fontWeight = FontWeight.Bold,
             color = DeepLove
