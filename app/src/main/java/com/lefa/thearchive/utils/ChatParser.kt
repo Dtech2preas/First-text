@@ -1,6 +1,7 @@
 package com.lefa.thearchive.utils
 
 import com.lefa.thearchive.model.Message
+import com.lefa.thearchive.model.PersistedData
 import com.lefa.thearchive.model.ReplyPair
 import com.lefa.thearchive.model.Stats
 import java.text.SimpleDateFormat
@@ -65,20 +66,41 @@ object ChatParser {
         return messages
     }
 
-    fun generateStats(messages: List<Message>): Stats {
+    /**
+     * Generates lightweight PersistedData from the list of messages.
+     * This avoids creating heavy derived objects (like ReplyPairs) that cause duplication in JSON.
+     */
+    fun generatePersistedData(messages: List<Message>): PersistedData {
         val messageCounts = mutableMapOf("lefa" to 0, "owami" to 0)
         val loveCounts = mutableMapOf("lefa" to 0, "owami" to 0)
         val wordCounts = mutableMapOf<String, MutableMap<String, Int>>()
         val hourlyActivity = mutableMapOf<Int, Int>()
-        val replyPairs = mutableListOf<ReplyPair>()
-
         val firstOccurrences = mutableMapOf<String, Pair<String, Date>>()
         var nocturnalMessages = 0
-        val messagesByDate = mutableMapOf<String, MutableList<Message>>()
-        val dayFormat = SimpleDateFormat("MM-dd", Locale.US)
+
+        // Additional Stats
+        var lefaMsgs = 0
+        var owamiMsgs = 0
+        var lefaChars = 0
+        var owamiChars = 0
+        var lefaWords = 0
+        var owamiWords = 0
+        var lefaEmojis = 0
+        var owamiEmojis = 0
+        var lefaMedia = 0
+        var owamiMedia = 0
+        var lefaLove = 0
+        var owamiLove = 0
+        var lefaNaughty = 0
+        var owamiNaughty = 0
+        var lefaAnnoyed = 0
+        var owamiAnnoyed = 0
 
         val specialWords = listOf("baby", "my love", "babe", "honey", "miss you")
         val firstWordsToTrack = listOf("i love you", "baby", "my love")
+
+        val naughtyWords = listOf("cum", "vagina", "dick", "hoohaa", "sugar cane", "sex", "porn", "nipples", "boobs")
+        val annoyanceWords = listOf("k", "whatever", "nvm", "fine")
 
         specialWords.forEach { word ->
             wordCounts[word] = mutableMapOf("lefa" to 0, "owami" to 0)
@@ -86,16 +108,41 @@ object ChatParser {
 
         val calendar = Calendar.getInstance()
 
-        for (i in messages.indices) {
-            val msg = messages[i]
+        for (msg in messages) {
             val contentLower = msg.content.lowercase()
+            val charCount = msg.content.length
+            val wordCount = msg.content.split("\\s+".toRegex()).size
+            val emojiCount = msg.content.count { Character.getType(it).toByte() == Character.SURROGATE } / 2 // Rough estimate
 
             // Message Count
             messageCounts[msg.author] = (messageCounts[msg.author] ?: 0) + 1
 
+            if (msg.author == "lefa") {
+                lefaMsgs++
+                lefaChars += charCount
+                lefaWords += wordCount
+                lefaEmojis += emojiCount
+                if (msg.content.contains("<Media omitted>")) lefaMedia++
+            } else if (msg.author == "owami") {
+                owamiMsgs++
+                owamiChars += charCount
+                owamiWords += wordCount
+                owamiEmojis += emojiCount
+                if (msg.content.contains("<Media omitted>")) owamiMedia++
+            }
+
             // Love Count
             if (contentLower.contains("i love you")) {
                 loveCounts[msg.author] = (loveCounts[msg.author] ?: 0) + 1
+                if (msg.author == "lefa") lefaLove++ else if (msg.author == "owami") owamiLove++
+            }
+
+            // Naughty & Annoyance
+            if (naughtyWords.any { contentLower.contains(it) }) {
+                if (msg.author == "lefa") lefaNaughty++ else if (msg.author == "owami") owamiNaughty++
+            }
+            if (annoyanceWords.any { contentLower == it }) { // Exact match for annoyance usually
+                 if (msg.author == "lefa") lefaAnnoyed++ else if (msg.author == "owami") owamiAnnoyed++
             }
 
             // Word Counts
@@ -122,59 +169,125 @@ object ChatParser {
             if (hour in 0..4) {
                 nocturnalMessages++
             }
-
-            // On This Day
-            val dayKey = dayFormat.format(msg.timestamp)
-            if (!messagesByDate.containsKey(dayKey)) {
-                messagesByDate[dayKey] = mutableListOf()
-            }
-            messagesByDate[dayKey]?.add(msg)
-
-            // Reply Pairs logic with Grouping
-            if (i < messages.size - 1) {
-                val nextMsg = messages[i + 1]
-                if (msg.author != nextMsg.author && msg.author != "unknown" && nextMsg.author != "unknown") {
-
-                    val block = mutableListOf<Message>()
-                    block.add(msg)
-
-                    var backIndex = i - 1
-                    var count = 0
-                    while (backIndex >= 0 && messages[backIndex].author == msg.author && count < 5) {
-                        block.add(0, messages[backIndex])
-                        backIndex--
-                        count++
-                    }
-
-                    val timeDiff = nextMsg.timestamp.time - msg.timestamp.time
-                    val combinedLength = block.sumOf { it.content.length }
-
-                    if (timeDiff < 3600000 && combinedLength > 5 && nextMsg.content.length > 5) {
-                        replyPairs.add(ReplyPair(block, nextMsg))
-                    }
-                }
-            }
         }
 
-        val startDate = if (messages.isNotEmpty()) messages.first().timestamp else Date()
         val dateRange = if (messages.isNotEmpty()) {
             val start = messages.first().fullDate
             val end = messages.last().fullDate
             "$start - $end"
         } else ""
 
-        return Stats(
+        return PersistedData(
+            messages = messages,
             totalMessages = messages.size,
             dateRange = dateRange,
-            startDate = startDate,
             messageCounts = messageCounts,
             loveCounts = loveCounts,
             specificWordCounts = wordCounts,
             hourlyActivity = hourlyActivity,
-            replyPairs = replyPairs,
             firstOccurrences = firstOccurrences,
             nocturnalMessages = nocturnalMessages,
-            messagesByDate = messagesByDate
+            // Populating detailed stats
+            lefaMsgs = lefaMsgs,
+            owamiMsgs = owamiMsgs,
+            lefaChars = lefaChars,
+            owamiChars = owamiChars,
+            lefaWords = lefaWords,
+            owamiWords = owamiWords,
+            lefaEmojis = lefaEmojis,
+            owamiEmojis = owamiEmojis,
+            lefaMedia = lefaMedia,
+            owamiMedia = owamiMedia,
+            lefaLove = lefaLove,
+            owamiLove = owamiLove,
+            lefaNaughty = lefaNaughty,
+            owamiNaughty = owamiNaughty,
+            lefaAnnoyed = lefaAnnoyed,
+            owamiAnnoyed = owamiAnnoyed
+        )
+    }
+
+    /**
+     * Reconstructs the full Stats object from PersistedData.
+     * Derived fields like ReplyPairs and MessagesByDate are calculated in-memory here.
+     */
+    fun reconstructStats(data: PersistedData): Stats {
+        val messagesByDate = mutableMapOf<String, MutableList<Message>>()
+        val dayFormat = SimpleDateFormat("MM-dd", Locale.US)
+        val replyPairs = mutableListOf<ReplyPair>()
+
+        // 1. Group Messages by Date
+        for (msg in data.messages) {
+            val dayKey = dayFormat.format(msg.timestamp)
+            messagesByDate.getOrPut(dayKey) { mutableListOf() }.add(msg)
+        }
+
+        // 2. Generate Reply Pairs (In-Memory Only)
+        // This logic is fast enough to run on load
+        val messages = data.messages
+        for (i in 0 until messages.size - 1) {
+            val msg = messages[i]
+            val nextMsg = messages[i + 1]
+            if (msg.author != nextMsg.author && msg.author != "unknown" && nextMsg.author != "unknown") {
+
+                val block = mutableListOf<Message>()
+                block.add(msg)
+
+                var backIndex = i - 1
+                var count = 0
+                while (backIndex >= 0 && messages[backIndex].author == msg.author && count < 5) {
+                    block.add(0, messages[backIndex])
+                    backIndex--
+                    count++
+                }
+
+                val timeDiff = nextMsg.timestamp.time - msg.timestamp.time
+                val combinedLength = block.sumOf { it.content.length }
+
+                if (timeDiff < 3600000 && combinedLength > 5 && nextMsg.content.length > 5) {
+                    replyPairs.add(ReplyPair(block, nextMsg))
+                }
+            }
+        }
+
+        val startDate = if (data.messages.isNotEmpty()) data.messages.first().timestamp else Date()
+
+        return Stats(
+            totalMessages = data.totalMessages,
+            dateRange = data.dateRange,
+            startDate = startDate,
+            messageCounts = data.messageCounts,
+            loveCounts = data.loveCounts,
+            specificWordCounts = data.specificWordCounts,
+            hourlyActivity = data.hourlyActivity,
+            replyPairs = replyPairs,
+            firstOccurrences = data.firstOccurrences,
+            nocturnalMessages = data.nocturnalMessages,
+            messagesByDate = messagesByDate,
+            // Pass through new fields if they exist in PersistedData
+            lefaMsgs = data.lefaMsgs,
+            owamiMsgs = data.owamiMsgs,
+            lefaChars = data.lefaChars,
+            owamiChars = data.owamiChars,
+            lefaWords = data.lefaWords,
+            owamiWords = data.owamiWords,
+            lefaEmojis = data.lefaEmojis,
+            owamiEmojis = data.owamiEmojis,
+            lefaMedia = data.lefaMedia,
+            owamiMedia = data.owamiMedia,
+            lefaLove = data.lefaLove,
+            owamiLove = data.owamiLove,
+            lefaNaughty = data.lefaNaughty,
+            owamiNaughty = data.owamiNaughty,
+            lefaAnnoyed = data.lefaAnnoyed,
+            owamiAnnoyed = data.owamiAnnoyed,
+            lefaConsecutive = data.lefaConsecutive,
+            owamiConsecutive = data.owamiConsecutive,
+            lefaRoutine = data.lefaRoutine,
+            owamiRoutine = data.owamiRoutine,
+            lefaActions = data.lefaActions,
+            owamiActions = data.owamiActions,
+            firstSigns = data.firstSigns
         )
     }
 

@@ -5,7 +5,6 @@ import com.lefa.thearchive.R
 import com.lefa.thearchive.model.Message
 import com.lefa.thearchive.model.Stats
 import com.lefa.thearchive.utils.ChatParser
-import com.lefa.thearchive.utils.GameEngine
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -17,11 +16,11 @@ import java.util.concurrent.TimeUnit
 
 class ArchiveRepository(private val context: Context) {
 
-    private val db = AppDatabase.getDatabase(context)
-    private val dao = db.messageDao()
-
     private val _loadingState = MutableStateFlow<LoadingState>(LoadingState.Idle)
     val loadingState: StateFlow<LoadingState> = _loadingState
+
+    // In-memory cache of messages for searching
+    private var allMessages: List<Message> = emptyList()
 
     sealed class LoadingState {
         object Idle : LoadingState()
@@ -34,17 +33,16 @@ class ArchiveRepository(private val context: Context) {
         _loadingState.value = LoadingState.Loading
         withContext(Dispatchers.IO) {
             try {
-                // 1. Check JSON Cache for Dashboard Stats
-                val cachedStats = StatsCache.loadStats(context)
+                // 1. Check if JSON data exists
+                val persistedData = JsonStorage.loadData(context)
 
-                // 2. Check DB consistency (basic check: count)
-                val dbCount = dao.getMessageCount()
-
-                if (cachedStats != null && dbCount > 0) {
-                    // Cache Hit
-                    _loadingState.value = LoadingState.Success(cachedStats)
+                if (persistedData != null) {
+                    // Cache Hit: Reconstruct Stats from optimized JSON
+                    val stats = ChatParser.reconstructStats(persistedData)
+                    allMessages = persistedData.messages // Cache for search
+                    _loadingState.value = LoadingState.Success(stats)
                 } else {
-                    // Cache Miss or First Run -> Parse
+                    // Cache Miss: Parse chat.txt and create JSON
                     performFullParse()
                 }
             } catch (e: Exception) {
@@ -61,64 +59,43 @@ class ArchiveRepository(private val context: Context) {
         reader.close()
 
         val messages = ChatParser.parseChat(content)
-        val stats = ChatParser.generateStats(messages)
+        val persistedData = ChatParser.generatePersistedData(messages)
 
-        // Save to DB
-        val entities = messages.map { msg ->
-            MessageEntity(
-                fullDate = msg.fullDate,
-                time = msg.time,
-                timestamp = msg.timestamp,
-                author = msg.author,
-                content = msg.content,
-                originalSender = msg.originalSender
-            )
-        }
+        // Save optimized JSON
+        JsonStorage.saveData(context, persistedData)
 
-        // Chunk insertion to avoid transaction limits if necessary, though Room handles it well usually.
-        // 40k rows is fine for a single transaction in modern phones, but let's be safe.
-        dao.clearAll()
-        // Splitting into chunks of 1000 just in case
-        entities.chunked(1000).forEach { chunk ->
-            dao.insertAll(chunk)
-        }
-
-        // Save Stats to Cache
-        StatsCache.saveStats(context, stats)
+        // Hydrate full Stats object
+        val stats = ChatParser.reconstructStats(persistedData)
+        allMessages = messages
 
         _loadingState.value = LoadingState.Success(stats)
     }
 
     suspend fun search(query: String): SearchResult {
-        return withContext(Dispatchers.IO) {
-            val allMatches = dao.searchMessages(query)
-
-            if (allMatches.isEmpty()) {
-                return@withContext SearchResult(
-                    query = query,
-                    found = false,
-                    messages = emptyList()
-                )
+        return withContext(Dispatchers.Default) {
+            if (allMessages.isEmpty()) {
+                return@withContext SearchResult(query = query, found = false)
             }
 
-            val lefaCount = dao.countMessagesByAuthor("lefa", query)
-            val owamiCount = dao.countMessagesByAuthor("owami", query)
+            val queryLower = query.lowercase()
+            val matches = allMessages.filter { it.content.lowercase().contains(queryLower) }
 
-            val firstMsg = allMatches.first()
+            if (matches.isEmpty()) {
+                return@withContext SearchResult(query = query, found = false)
+            }
+
+            val lefaCount = matches.count { it.author == "lefa" }
+            val owamiCount = matches.count { it.author == "owami" }
+
+            val firstMsg = matches.first()
             val firstUser = firstMsg.author
 
-            // Days since start of chat
-            val startOfChat = dao.getFirstMessageEver()?.timestamp ?: Date()
+            val startOfChat = allMessages.firstOrNull()?.timestamp ?: Date()
             val diffInMillies = firstMsg.timestamp.time - startOfChat.time
             val daysElapsed = TimeUnit.MILLISECONDS.toDays(diffInMillies)
 
-            // Partner Response Time
-            // Logic: Find first time User A said it, then find first time User B said it AFTER User A
-            // Or just difference between first occurrences of each.
-            // User requested: "How long it took the partner to say it... from the time the first partner said it"
-
-            val lefaFirst = dao.findFirstMessageByAuthor("lefa", query)
-            val owamiFirst = dao.findFirstMessageByAuthor("owami", query)
+            val lefaFirst = matches.find { it.author == "lefa" }
+            val owamiFirst = matches.find { it.author == "owami" }
 
             var responseTimeStr = "Never"
 
@@ -146,16 +123,7 @@ class ArchiveRepository(private val context: Context) {
                 partnerResponseTime = responseTimeStr,
                 lefaCount = lefaCount,
                 owamiCount = owamiCount,
-                messages = allMatches.map { entity ->
-                    Message(
-                        fullDate = entity.fullDate,
-                        time = entity.time,
-                        timestamp = entity.timestamp,
-                        author = entity.author,
-                        content = entity.content,
-                        originalSender = entity.originalSender
-                    )
-                }
+                messages = matches
             )
         }
     }
