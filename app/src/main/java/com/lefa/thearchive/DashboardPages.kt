@@ -1,291 +1,351 @@
 package com.lefa.thearchive
 
+import androidx.compose.animation.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.lefa.thearchive.model.Stats
-import com.lefa.thearchive.ui.theme.DeepLove
-import com.lefa.thearchive.ui.theme.RoseBackground
-import com.lefa.thearchive.ui.theme.SoftAccent
-import com.lefa.thearchive.ui.theme.Gold
+import com.lefa.thearchive.ui.theme.*
 import com.lefa.thearchive.utils.GameEngine
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
-// Colors (Hardcoded if Theme not available)
-val RoseBg = Color(0xFFFFF0F5)
-val LoveRed = Color(0xFFE91E63)
-val AccentPink = Color(0xFFFF80AB)
-val GoldColor = Color(0xFFFFD700)
-
+@OptIn(ExperimentalFoundationApi::class) // For Pager
 @Composable
-fun DashboardPages(
-    onNavigateBack: () -> Unit
-) {
+fun DashboardPages(onNavigateBack: () -> Unit) {
+    // Stats are already loaded in GameEngine.stats if we are here (from MainActivity logic)
     val stats = GameEngine.stats
-    var currentPage by remember { mutableStateOf(0) }
-    val totalPages = 5
+    val pagerState = rememberPagerState(pageCount = { 5 })
+    val scope = rememberCoroutineScope()
 
-    Box(
+    Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(RoseBg)
+            .background(Brush.verticalGradient(listOf(RoseBackground, PureWhite)))
     ) {
-        Column(
+        // --- Pager ---
+        HorizontalPager(
+            state = pagerState,
             modifier = Modifier
-                .fillMaxSize()
-                .padding(16.dp)
-                .verticalScroll(rememberScrollState())
+                .weight(1f)
+                .fillMaxWidth()
+        ) { page ->
+            when (page) {
+                0 -> OverviewPage(stats)
+                1 -> LoveStatsPage(stats)
+                2 -> ActivityStatsPage(stats)
+                3 -> NaughtyStatsPage(stats)
+                4 -> FinalePage(onNavigateBack)
+            }
+        }
+
+        // --- Indicators ---
+        Row(
+            Modifier
+                .height(50.dp)
+                .fillMaxWidth(),
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(
-                text = "Our Story ❤️",
-                fontSize = 32.sp,
-                fontWeight = FontWeight.Bold,
-                color = LoveRed,
-                modifier = Modifier.padding(bottom = 16.dp)
-            )
-
-            when (currentPage) {
-                0 -> PageOne(stats)
-                1 -> PageTwo(stats)
-                2 -> PageThree(stats)
-                3 -> PageFour(stats)
-                4 -> PageFive(stats)
-            }
-
-            Spacer(modifier = Modifier.height(80.dp)) // Space for FAB
-        }
-
-        // Next Button
-        if (currentPage < totalPages - 1) {
-            FloatingActionButton(
-                onClick = { currentPage++ },
-                containerColor = LoveRed,
-                contentColor = Color.White,
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .padding(16.dp)
-            ) {
-                Text("Next ➡️", modifier = Modifier.padding(horizontal = 16.dp))
-            }
-        } else {
-            // Finish Button on Last Page
-            FloatingActionButton(
-                onClick = onNavigateBack,
-                containerColor = GoldColor,
-                contentColor = Color.Black,
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .padding(16.dp)
-            ) {
-                Text("Finale ✨", modifier = Modifier.padding(horizontal = 16.dp))
-            }
-        }
-
-        // Back Button (if not on first page)
-        if (currentPage > 0) {
-             FloatingActionButton(
-                onClick = { currentPage-- },
-                containerColor = SoftAccent, // Use distinct color
-                contentColor = Color.White,
-                modifier = Modifier
-                    .align(Alignment.BottomStart)
-                    .padding(16.dp)
-            ) {
-                Text("⬅️ Back", modifier = Modifier.padding(horizontal = 16.dp))
+            repeat(5) { iteration ->
+                val color = if (pagerState.currentPage == iteration) DeepLove else Color.LightGray
+                Box(
+                    modifier = Modifier
+                        .padding(2.dp)
+                        .clip(CircleShape)
+                        .background(color)
+                        .size(10.dp)
+                        .clickable {
+                            scope.launch {
+                                pagerState.animateScrollToPage(iteration)
+                            }
+                        }
+                )
             }
         }
     }
 }
 
+// --- REUSABLE COMPONENTS ---
+
 @Composable
-fun StatCard(title: String, content: @Composable () -> Unit) {
+fun InfoCard(
+    title: String,
+    content: @ComposableColumnScope.() -> Unit
+) {
     Card(
-        colors = CardDefaults.cardColors(containerColor = Color.White),
-        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 8.dp)
+            .padding(bottom = 16.dp),
+        colors = CardDefaults.cardColors(containerColor = PureWhite),
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+        shape = RoundedCornerShape(16.dp)
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Text(title, fontSize = 20.sp, fontWeight = FontWeight.Bold, color = LoveRed)
-            Spacer(modifier = Modifier.height(8.dp))
+        Column(
+            modifier = Modifier.padding(20.dp)
+        ) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleMedium,
+                color = TextSecondary,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(bottom = 12.dp)
+            )
             content()
         }
     }
 }
 
 @Composable
-fun PageOne(stats: Stats) {
-    StatCard("📊 The Totals") {
-        Text("Total Messages: ${stats.totalMessages}")
-        Text("Lefa: ${stats.lefaMsgs} | Owami: ${stats.owamiMsgs}")
-        Spacer(modifier = Modifier.height(4.dp))
-        Text("Total Characters Sent:")
-        Text("Lefa: ${stats.lefaChars}")
-        Text("Owami: ${stats.owamiChars}")
-        Spacer(modifier = Modifier.height(4.dp))
-        Text("Total Words:")
-        Text("Lefa: ${stats.lefaWords}")
-        Text("Owami: ${stats.owamiWords}")
-    }
-
-    StatCard("📸 Media & Emojis") {
-        Text("Pics/Videos Sent:")
-        Text("Lefa: ${stats.lefaMedia}")
-        Text("Owami: ${stats.owamiMedia}")
-        Spacer(modifier = Modifier.height(8.dp))
-        Text("Total Emojis:")
-        Text("Lefa: ${stats.lefaEmojis}")
-        Text("Owami: ${stats.owamiEmojis}")
-    }
-
-    StatCard("❤️ Love Meter") {
-        Text("Number of 'Love You's:")
-        Text("Lefa: ${stats.lefaLove} ❤️")
-        Text("Owami: ${stats.owamiLove} ❤️")
-        if (stats.lefaLove > stats.owamiLove) {
-            Text("Winner: Lefa! (He loves you more 😜)", fontWeight = FontWeight.Bold)
-        } else {
-            Text("Winner: Owami! (She loves you more 😜)", fontWeight = FontWeight.Bold)
-        }
-    }
-}
-
-@Composable
-fun PageTwo(stats: Stats) {
-    StatCard("😈 Naughty & Nice") {
-        Text("Naughty Words Score:")
-        Text("Lefa: ${stats.lefaNaughty} 😈")
-        Text("Owami: ${stats.owamiNaughty} 😈")
-        Text("Winner: ${if(stats.owamiNaughty > stats.lefaNaughty) "Owami" else "Lefa"} is naughtier!")
-
-        Spacer(modifier = Modifier.height(8.dp))
-        Text("Annoyance (K, whatever, nvm):")
-        Text("Lefa: ${stats.lefaAnnoyed}")
-        Text("Owami: ${stats.owamiAnnoyed}")
-    }
-
-    StatCard("📅 Routines") {
-        Text("Times mentioned:")
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Column {
-                Text("Lefa", fontWeight = FontWeight.Bold)
-                stats.lefaRoutine.forEach { (k, v) -> Text("$k: $v") }
-            }
-            Column {
-                Text("Owami", fontWeight = FontWeight.Bold)
-                stats.owamiRoutine.forEach { (k, v) -> Text("$k: $v") }
-            }
-        }
-    }
-}
-
-@Composable
-fun PageThree(stats: Stats) {
-    StatCard("💬 Comparisons") {
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Column {
-                Text("Lefa", fontWeight = FontWeight.Bold)
-                Text("Asked 'How are you': ${stats.lefaActions["how are you"]}")
-                Text("Said 'Sorry': ${stats.lefaActions["sorry"]}")
-                Text("Good Morning: ${stats.lefaActions["good morning"]}")
-                Text("Good Night: ${stats.lefaActions["good night"]}")
-            }
-            Column {
-                Text("Owami", fontWeight = FontWeight.Bold)
-                Text("Asked 'How are you': ${stats.owamiActions["how are you"]}")
-                Text("Said 'Sorry': ${stats.owamiActions["sorry"]}")
-                Text("Good Morning: ${stats.owamiActions["good morning"]}")
-                Text("Good Night: ${stats.owamiActions["good night"]}")
-            }
-        }
-    }
-
-    StatCard("🔥 Streaks") {
-        Text("Most Consecutive Texts:")
-        Text("Lefa: ${stats.lefaConsecutive}")
-        Text("Owami: ${stats.owamiConsecutive}")
-    }
-
-    StatCard("💘 First Signs") {
-        stats.firstSigns.take(5).forEach {
-            Text("• $it", fontSize = 14.sp)
-            Spacer(modifier = Modifier.height(4.dp))
-        }
-        if (stats.firstSigns.size > 5) {
-            Text("...and many more moments.", fontSize = 12.sp, color = Color.Gray)
-        }
-    }
-}
-
-@Composable
-fun PageFour(stats: Stats) {
-    // Animation Page
-    StatCard("🍆🍑 The Special Animation") {
-        AnimationPlayground()
-    }
-}
-
-@Composable
-fun PageFive(stats: Stats) {
-    StatCard("👑 The Final Verdict") {
-        val lefaScore = stats.lefaLove + stats.lefaMsgs / 100
-        val owamiScore = stats.owamiLove + stats.owamiMsgs / 100
-
-        Text("Based on our chat history...", fontSize = 18.sp)
-        Spacer(modifier = Modifier.height(8.dp))
-        Text("Lefa is the protector, the consistent lover.")
-        Text("Owami is the spark, the naughty energy.")
-        Spacer(modifier = Modifier.height(8.dp))
-        Text("Together: A perfect match ❤️")
-    }
-}
-
-@Composable
-fun AnimationPlayground() {
-    var splashCount by remember { mutableStateOf(0) }
-    var showEmoji by remember { mutableStateOf(false) }
-    var offset by remember { mutableStateOf(0f) }
-
-    // Simple animation logic simulation (click to animate)
-    // In a real app, use Animatable
-
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Box(modifier = Modifier
-            .height(200.dp)
+fun StatItem(label: String, valueLefa: String, valueOwami: String, isHeader: Boolean = false) {
+    Row(
+        modifier = Modifier
             .fillMaxWidth()
-            .clickable {
-                splashCount++
-                if (splashCount >= 3) showEmoji = true
-                if (splashCount >= 5) {
-                    // Reset or Next Logic
-                    splashCount = 0
-                    showEmoji = false
-                }
-            },
+            .padding(vertical = 4.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            label,
+            modifier = Modifier.weight(1f),
+            color = if (isHeader) TextPrimary else TextSecondary,
+            fontWeight = if (isHeader) FontWeight.Bold else FontWeight.Normal
+        )
+        Text(
+            valueLefa,
+            modifier = Modifier.weight(0.5f),
+            textAlign = TextAlign.Center,
+            color = if (isHeader) DeepLove else TextPrimary,
+            fontWeight = if (isHeader) FontWeight.Bold else FontWeight.Normal
+        )
+        Text(
+            valueOwami,
+            modifier = Modifier.weight(0.5f),
+            textAlign = TextAlign.Center,
+            color = if (isHeader) DeepLove else TextPrimary,
+            fontWeight = if (isHeader) FontWeight.Bold else FontWeight.Normal
+        )
+    }
+}
+
+// --- PAGES ---
+
+@Composable
+fun OverviewPage(stats: com.lefa.thearchive.model.Stats) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(24.dp)
+    ) {
+        Text(
+            "Overview",
+            fontSize = 32.sp,
+            fontWeight = FontWeight.Bold,
+            color = DeepLove,
+            modifier = Modifier.padding(bottom = 24.dp)
+        )
+
+        InfoCard("Total Interaction") {
+            StatItem("", "Lefa", "Owami", isHeader = true)
+            Divider(color = RoseSurface, modifier = Modifier.padding(vertical = 8.dp))
+            StatItem("Messages", "${stats.lefaMsgs}", "${stats.owamiMsgs}")
+            StatItem("Words", "${stats.lefaWords}", "${stats.owamiWords}")
+            StatItem("Characters", "${stats.lefaChars}", "${stats.owamiChars}")
+            StatItem("Emojis", "${stats.lefaEmojis}", "${stats.owamiEmojis}")
+            StatItem("Media", "${stats.lefaMedia}", "${stats.owamiMedia}")
+        }
+
+        InfoCard("Consecutive Messages") {
+             StatItem("Most in a row", "${stats.lefaConsecutive}", "${stats.owamiConsecutive}")
+        }
+    }
+}
+
+@Composable
+fun LoveStatsPage(stats: com.lefa.thearchive.model.Stats) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(24.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Default.Favorite, contentDescription = null, tint = DeepLove)
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                "Romance",
+                fontSize = 32.sp,
+                fontWeight = FontWeight.Bold,
+                color = DeepLove
+            )
+        }
+        Spacer(modifier = Modifier.height(24.dp))
+
+        InfoCard("Expressions of Love") {
+            StatItem("", "Lefa", "Owami", isHeader = true)
+            Divider(color = RoseSurface, modifier = Modifier.padding(vertical = 8.dp))
+            StatItem("'I Love You'", "${stats.lefaLove}", "${stats.owamiLove}")
+
+            stats.firstSigns.forEachIndexed { index, phrase ->
+                // This is a simplified display as firstSigns is a flat list
+                 // Ideally we'd map this better but sticking to data structure
+            }
+        }
+
+        InfoCard("First Signs") {
+             Text(
+                "Who said it first?",
+                fontWeight = FontWeight.Bold,
+                color = TextPrimary,
+                modifier = Modifier.padding(bottom = 8.dp)
+            )
+            stats.firstSigns.forEach { sign ->
+                 Text("• $sign", color = TextSecondary, fontSize = 14.sp, modifier = Modifier.padding(bottom = 4.dp))
+            }
+        }
+    }
+}
+
+@Composable
+fun ActivityStatsPage(stats: com.lefa.thearchive.model.Stats) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(24.dp)
+    ) {
+         Text(
+            "Routine",
+            fontSize = 32.sp,
+            fontWeight = FontWeight.Bold,
+            color = DeepLove,
+            modifier = Modifier.padding(bottom = 24.dp)
+        )
+
+        InfoCard("Daily Life") {
+             StatItem("", "Lefa", "Owami", isHeader = true)
+             Divider(color = RoseSurface, modifier = Modifier.padding(vertical = 8.dp))
+
+             // Combine keys from both maps
+             val allKeys = (stats.lefaRoutine.keys + stats.owamiRoutine.keys).distinct()
+
+             allKeys.forEach { key ->
+                 StatItem(
+                     key.replaceFirstChar { it.uppercase() },
+                     "${stats.lefaRoutine[key] ?: 0}",
+                     "${stats.owamiRoutine[key] ?: 0}"
+                 )
+             }
+        }
+
+         InfoCard("Comparisons") {
+             val allActions = (stats.lefaActions.keys + stats.owamiActions.keys).distinct()
+             allActions.forEach { key ->
+                  StatItem(
+                     key.replaceFirstChar { it.uppercase() },
+                     "${stats.lefaActions[key] ?: 0}",
+                     "${stats.owamiActions[key] ?: 0}"
+                 )
+             }
+         }
+    }
+}
+
+@Composable
+fun NaughtyStatsPage(stats: com.lefa.thearchive.model.Stats) {
+    // Subtle animation for "Alive" feel
+    val infiniteTransition = rememberInfiniteTransition()
+    val alpha by infiniteTransition.animateFloat(
+        initialValue = 0.7f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(2000),
+            repeatMode = RepeatMode.Reverse
+        )
+    )
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(24.dp)
+    ) {
+         Text(
+            "Late Night 😈",
+            fontSize = 32.sp,
+            fontWeight = FontWeight.Bold,
+            color = DeepLove,
+            modifier = Modifier.padding(bottom = 24.dp)
+        )
+
+        InfoCard("Heat Level") {
+             StatItem("", "Lefa", "Owami", isHeader = true)
+             Divider(color = RoseSurface, modifier = Modifier.padding(vertical = 8.dp))
+             StatItem("Spice Count", "${stats.lefaNaughty}", "${stats.owamiNaughty}")
+             StatItem("Slightly Mad", "${stats.lefaAnnoyed}", "${stats.owamiAnnoyed}")
+        }
+
+        Spacer(modifier = Modifier.height(20.dp))
+
+        // Animated Emoji Box
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(150.dp)
+                .background(RoseSurface.copy(alpha = 0.3f), RoundedCornerShape(16.dp)),
             contentAlignment = Alignment.Center
         ) {
-            Text("🍆", fontSize = 60.sp, modifier = Modifier.offset(x = (-50 + (splashCount * 10)).dp))
-            Text("🍑", fontSize = 60.sp, modifier = Modifier.offset(x = (50 - (splashCount * 10)).dp))
-
-            if (splashCount > 0) {
-                Text("💦", fontSize = 40.sp, modifier = Modifier.offset(y = (-50).dp))
-            }
-
-            if (showEmoji) {
-                Text("🤭", fontSize = 40.sp, modifier = Modifier.offset(y = 50.dp))
-            }
+            Text(
+                "🍆 🍑 💦",
+                fontSize = 50.sp,
+                color = Color.White.copy(alpha = alpha) // Pulsing alpha
+            )
         }
-        Text("Tap to play! (${splashCount}/5)", color = Color.Gray)
+    }
+}
+
+@Composable
+fun FinalePage(onNavigateBack: () -> Unit) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(30.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Text(
+            "One Last Thing...",
+            fontSize = 28.sp,
+            fontWeight = FontWeight.Bold,
+            color = DeepLove
+        )
+
+        Spacer(modifier = Modifier.height(30.dp))
+
+        Button(
+            onClick = onNavigateBack,
+            colors = ButtonDefaults.buttonColors(containerColor = DeepLove),
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(56.dp),
+            shape = RoundedCornerShape(28.dp),
+            elevation = ButtonDefaults.buttonElevation(8.dp)
+        ) {
+            Text("READ FINAL LETTER", fontSize = 18.sp, fontWeight = FontWeight.Bold)
+        }
     }
 }

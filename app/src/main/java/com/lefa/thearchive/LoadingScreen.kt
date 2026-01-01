@@ -1,5 +1,6 @@
 package com.lefa.thearchive
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -13,75 +14,23 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.lefa.thearchive.data.ArchiveRepository
 import com.lefa.thearchive.model.Stats
 import com.lefa.thearchive.ui.theme.*
-import com.lefa.thearchive.utils.CacheManager
-import com.lefa.thearchive.utils.ChatParser
-import com.lefa.thearchive.utils.GameEngine
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import java.io.BufferedReader
-import java.io.InputStreamReader
 import kotlin.math.cos
 import kotlin.math.sin
 import kotlin.random.Random
 
 @Composable
 fun LoadingScreen(
-    onParsingComplete: (Stats) -> Unit,
+    loadingState: ArchiveRepository.LoadingState,
+    onEnterClick: (Stats) -> Unit,
     onStartMeantimeQuiz: () -> Unit
 ) {
-    var parsingComplete by remember { mutableStateOf(false) }
-    var stats by remember { mutableStateOf<Stats?>(null) }
-    val context = LocalContext.current
-    val scope = rememberCoroutineScope()
-
-    // Simulate loading for 100 seconds to show animations (as requested)
-    LaunchedEffect(Unit) {
-        scope.launch(Dispatchers.Default) {
-            // 1. Get Hardcoded Stats immediately for the dashboard
-            val baseStats = GameEngine.stats
-
-            // 2. Parse Chat in Background to get Messages for the Quiz Game
-            // We do this concurrently with the delay so it's ready when the user is done waiting
-            val inputStream = context.resources.openRawResource(R.raw.chat)
-            val reader = BufferedReader(InputStreamReader(inputStream))
-            val content = reader.readText()
-            reader.close()
-
-            val messages = ChatParser.parseChat(content)
-
-            // 3. Update stats with parsed messages
-            // We only need the messagesByDate for the game logic in MainActivity
-            val enrichedStats = baseStats.copy(
-                messagesByDate = messages.groupBy {
-                    // Simple grouping by date string or whatever ChatParser uses
-                    // Actually, let's just use what ChatParser.generateStats would have produced for messagesByDate
-                    // But to be safe and quick, let's just use the messages list directly if we can,
-                    // or mimic the structure.
-                    // MainActivity uses: messages = stats.messagesByDate.values.flatten()
-                    // So we just need to put them in a map.
-                    "all"
-                }
-            )
-
-            stats = enrichedStats
-
-            // Wait for 100 seconds (fake loading)
-            delay(100_000L)
-
-            withContext(Dispatchers.Main) {
-                parsingComplete = true
-            }
-        }
-    }
-
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -115,21 +64,30 @@ fun LoadingScreen(
 
             Spacer(modifier = Modifier.height(50.dp))
 
-            if (!parsingComplete) {
-                CircularProgressIndicator(color = DeepLove)
-                Spacer(modifier = Modifier.height(20.dp))
-                Text("Preparing your memories... (Please wait & enjoy the show)", color = Color.Gray)
-            } else {
-                 // --- BUTTONS ---
-                 Button(
-                    onClick = { stats?.let { onParsingComplete(it) } },
-                    colors = ButtonDefaults.buttonColors(containerColor = DeepLove),
-                    shape = RoundedCornerShape(25.dp),
-                    modifier = Modifier
-                        .height(50.dp)
-                        .width(200.dp)
-                ) {
-                    Text("ENTER", color = Color.White, fontWeight = FontWeight.Bold)
+            when (loadingState) {
+                is ArchiveRepository.LoadingState.Loading -> {
+                    CircularProgressIndicator(color = DeepLove)
+                    Spacer(modifier = Modifier.height(20.dp))
+                    Text("Preparing your memories... (Please wait & enjoy the show)", color = Color.Gray)
+                }
+                is ArchiveRepository.LoadingState.Success -> {
+                    // --- BUTTONS ---
+                    Button(
+                        onClick = { onEnterClick(loadingState.stats) },
+                        colors = ButtonDefaults.buttonColors(containerColor = DeepLove),
+                        shape = RoundedCornerShape(25.dp),
+                        modifier = Modifier
+                            .height(50.dp)
+                            .width(200.dp)
+                    ) {
+                        Text("ENTER", color = Color.White, fontWeight = FontWeight.Bold)
+                    }
+                }
+                is ArchiveRepository.LoadingState.Error -> {
+                    Text("Error loading data", color = Color.Red)
+                }
+                else -> {
+                    CircularProgressIndicator(color = DeepLove)
                 }
             }
 
@@ -164,7 +122,7 @@ fun LoadingScreen(
     }
 }
 
-// --- ANIMATION COMPONENTS ---
+// --- ANIMATION COMPONENTS (Kept same as before) ---
 
 @Composable
 fun FireworkDisplay() {
